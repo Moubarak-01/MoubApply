@@ -1,73 +1,61 @@
-# React + TypeScript + Vite
+# JobSwipe - Smart Job Application Tracker
 
-This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
+A "Tinder-style" job application interface built to streamline the process of finding and tracking internships and full-time roles. This project helps manage the application pipeline with a daily limit focus (20-30 high-quality applications).
 
-Currently, two official plugins are available:
+## 🚀 Features Implemented
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Babel](https://babeljs.io/) (or [oxc](https://oxc.rs) when used in [rolldown-vite](https://vite.dev/guide/rolldown)) for Fast Refresh
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/) for Fast Refresh
+### 1. Discovery (The Swipe Deck)
+- **Tinder-Like Interface**: Built with `framer-motion` for smooth drag gestures.
+- **Actions**:
+  - **Swipe Right**: Adds job to the "Queue" (Apply).
+  - **Swipe Left**: Rejects the job.
+- **Visual Feedback**: Dynamic background colors (Green for apply, Red for reject) during interaction.
+- **Smart Stacking**: Uses a card stack layout with depth effects.
 
-## React Compiler
+### 2. Job Cards
+- **Match Score**: Displays an AI-generated match percentage (e.g., "98% Match").
+- **Quick Tags**: Highlights key info like "Remote", "Summer 2026", "Visa Sponsored".
+- **Graduation Check**: Automatically flags if the job's graduation year requirement doesn't match the user's profile (e.g., Red warning text).
 
-The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
+### 3. Application Tracker
+- **Kanban Board**: A dashboard to track application status.
+- **Columns**:
+  - **Queued**: Jobs approved via swipe.
+  - **Processing**: Currently being handled by the automation agent.
+  - **Applied**: Successfully submitted applications.
+  - **Action Needed**: Applications stuck on CAPTCHAs or requiring manual input.
 
-## Expanding the ESLint configuration
+### 4. Job Detail Modal
+- **Deep Dive**: Click any card to open a detailed modal.
+- **AI Summary**: (UI Placeholder) displays "Why you'll love it", "The catch", and "Top 3 Skills".
+- **Requirements**: Full text view of the job description.
 
-If you are developing a production application, we recommend updating the configuration to enable type-aware lint rules:
+## 🛠 Tech Stack
 
-```js
-export default defineConfig([
-  globalIgnores(['dist']),
-  {
-    files: ['**/*.{ts,tsx}'],
-    extends: [
-      // Other configs...
+- **Framework**: React 19 + TypeScript (via Vite)
+- **Styling**: Tailwind CSS v3
+- **Animations**: Framer Motion
+- **Icons**: Lucide React
+- **Utils**: `clsx`, `tailwind-merge`
 
-      // Remove tseslint.configs.recommended and replace with this
-      tseslint.configs.recommendedTypeChecked,
-      // Alternatively, use this for stricter rules
-      tseslint.configs.strictTypeChecked,
-      // Optionally, add this for stylistic rules
-      tseslint.configs.stylisticTypeChecked,
+## ⚙️ Setup & Running
 
-      // Other configs...
-    ],
-    languageOptions: {
-      parserOptions: {
-        project: ['./tsconfig.node.json', './tsconfig.app.json'],
-        tsconfigRootDir: import.meta.dirname,
-      },
-      // other options...
-    },
-  },
-])
-```
+1. **Install Dependencies**:
+   ```bash
+   npm install
+   ```
 
-You can also install [eslint-plugin-react-x](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-x) and [eslint-plugin-react-dom](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-dom) for React-specific lint rules:
+2. **Run Development Server**:
+   ```bash
+   npm run dev
+   ```
 
-```js
-// eslint.config.js
-import reactX from 'eslint-plugin-react-x'
-import reactDom from 'eslint-plugin-react-dom'
+3. **Build for Production**:
+   ```bash
+   npm run build
+   ```
 
-export default defineConfig([
-  globalIgnores(['dist']),
-  {
-    files: ['**/*.{ts,tsx}'],
-    extends: [
-      // Other configs...
-      // Enable lint rules for React
-      reactX.configs['recommended-typescript'],
-      // Enable lint rules for React DOM
-      reactDom.configs.recommended,
-    ],
-    languageOptions: {
-      parserOptions: {
-        project: ['./tsconfig.node.json', './tsconfig.app.json'],
-        tsconfigRootDir: import.meta.dirname,
-      },
-      // other options...
-    },
-  },
-])
-```
+## 📝 Recent Updates
+
+- **Fix (WSL Compatibility)**: Downgraded Tailwind CSS from v4 to v3.4.17 to resolve `lightningcss` binary mismatch issues between Linux (WSL) and Windows environments.
+- **Architecture**: Established the core layout with Sidebar navigation and routed views for Discovery, Tracker, and Profile.
