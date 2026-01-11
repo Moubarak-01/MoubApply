@@ -7,15 +7,24 @@ interface JobDeckProps {
   userGradYear: number;
   onJobSelect: (job: Job) => void;
   onDeckEmpty: () => void;
+  onSwipeAction?: (direction: 'right' | 'left', job: Job) => void;
 }
 
-export const JobDeck: React.FC<JobDeckProps> = ({ initialJobs, userGradYear, onJobSelect, onDeckEmpty }) => {
+export const JobDeck: React.FC<JobDeckProps> = ({ initialJobs, userGradYear, onJobSelect, onDeckEmpty, onSwipeAction }) => {
   const [jobs, setJobs] = useState<Job[]>(initialJobs);
 
+  // Update internal state when initialJobs changes (e.g. after API load)
+  React.useEffect(() => {
+    setJobs(initialJobs);
+  }, [initialJobs]);
+
   const handleSwipe = (direction: 'right' | 'left', job: Job) => {
+    if (onSwipeAction) {
+      onSwipeAction(direction, job);
+    }
+
     if (direction === 'right') {
       console.log(`Apply to ${job.company}`);
-      // In a real app, this would trigger the API call
     } else {
       console.log(`Reject ${job.company}`);
     }

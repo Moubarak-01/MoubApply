@@ -1,67 +1,87 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { JobDeck } from './components/JobDeck';
 import { Tracker } from './components/Tracker';
 import { JobDetailModal } from './components/JobDetailModal';
 import { type Job } from './components/JobCard';
-import { LayoutGrid, Layers, User, Settings } from 'lucide-react';
+import { LayoutGrid, Layers, User, Settings, Loader2 } from 'lucide-react';
 import { clsx } from 'clsx';
+import { api } from './services/api';
 
-// Mock Data
-const MOCK_JOBS: Job[] = [
-  {
-    id: '1',
-    title: 'Software Engineer Intern',
-    company: 'MongoDB',
-    matchScore: 98,
-    tags: ['Remote', 'Summer 2026', 'Go', 'React'],
-    gradYearReq: 2026,
-    description: 'Join our core database team. Experience with distributed systems is a plus.',
-  },
-  {
-    id: '2',
-    title: 'Frontend Developer',
-    company: 'Vercel',
-    matchScore: 92,
-    tags: ['Next.js', 'Remote', 'TypeScript'],
-    gradYearReq: 2025, // Mismatch example
-    description: 'Build the future of the web. Deep understanding of React internals required.',
-  },
-  {
-    id: '3',
-    title: 'Product Design Intern',
-    company: 'Linear',
-    matchScore: 85,
-    tags: ['Design System', 'Figma', 'Hybrid'],
-    gradYearReq: 2026,
-    description: 'Craft beautiful interfaces. Attention to detail is paramount.',
-  },
-   {
-    id: '4',
-    title: 'Backend Engineer',
-    company: 'Stripe',
-    matchScore: 99,
-    tags: ['Ruby', 'Payments', 'Infrastructure'],
-    gradYearReq: 2026,
-    description: 'Help increase the GDP of the internet.',
-  },
-];
-
-const MOCK_APPLICATIONS = [
-  { id: '101', company: 'Google', role: 'STEP Intern', status: 'Applied', date: 'Jan 10' },
-  { id: '102', company: 'Meta', role: 'Rotational Engineer', status: 'Queued', date: 'Jan 11' },
-  { id: '103', company: 'Netflix', role: 'UI Engineer', status: 'Processing', date: 'Jan 11' },
-  { id: '104', company: 'Amazon', role: 'SDE I', status: 'Action Needed', date: 'Jan 09' },
-  { id: '105', company: 'Apple', role: 'iOS Engineer', status: 'Queued', date: 'Jan 11' },
-] as const;
+// Mock Applications (Removed)
 
 type View = 'discovery' | 'tracker' | 'profile';
 
 function App() {
   const [currentView, setCurrentView] = useState<View>('discovery');
   const [selectedJob, setSelectedJob] = useState<Job | null>(null);
+  const [jobs, setJobs] = useState<Job[]>([]);
+  const [applications, setApplications] = useState<any[]>([]); // New state for apps
+  const [loading, setLoading] = useState(true);
+  const [userId, setUserId] = useState<string | null>(null);
   
   // User Profile Data
   const userGradYear = 2026;
+
+  // Fetch Data Function
+  const loadData = async () => {
+      try {
+        const [jobsData, userData] = await Promise.all([
+            api.getJobs(),
+            api.getUser()
+        ]);
+        
+        const formattedJobs = jobsData.map((j: any) => ({ ...j, id: j._id }));
+        setJobs(formattedJobs);
+        setUserId(userData._id);
+
+        // Fetch applications if user exists
+        if (userData._id) {
+            const appsData = await api.getApplications(userData._id);
+            // Format for Tracker: extracting company/role from the populated jobId
+            const formattedApps = appsData.map((app: any) => ({
+                id: app._id,
+                company: app.jobId.company,
+                role: app.jobId.title,
+                status: app.status,
+                date: new Date(app.createdAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
+            }));
+            setApplications(formattedApps);
+        }
+
+      } catch (err) {
+        console.error("Failed to load data", err);
+      } finally {
+        setLoading(false);
+      }
+  };
+
+  // Initial Load
+  useEffect(() => {
+    loadData();
+  }, []);
+
+  const handleSwipe = async (direction: 'right' | 'left', job: Job) => {
+    if (direction === 'right' && userId) {
+       try {
+         await api.apply(userId, job.id);
+         console.log(`Applied to ${job.company}`);
+         // Refresh applications list quietly
+         const appsData = await api.getApplications(userId);
+         const formattedApps = appsData.map((app: any) => ({
+            id: app._id,
+            company: app.jobId.company,
+            role: app.jobId.title,
+            status: app.status,
+            date: new Date(app.createdAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
+        }));
+        setApplications(formattedApps);
+       } catch (err) {
+         console.error("Failed to apply", err);
+       }
+    } else if (!userId) {
+        console.error("User ID not found, cannot apply");
+    }
+  };
 
   return (
     <div className="flex h-screen bg-slate-50 text-slate-900 font-sans overflow-hidden">
@@ -86,7 +106,7 @@ function App() {
             onClick={() => setCurrentView('tracker')}
             icon={Layers} 
             label="Tracker" 
-            badge={3}
+            badge={applications.length}
           />
           <NavButton 
             active={currentView === 'profile'} 
@@ -123,7 +143,7 @@ function App() {
            <div className="flex items-center gap-4">
               <div className="hidden sm:flex items-center gap-2 bg-indigo-50 px-3 py-1.5 rounded-full border border-indigo-100">
                   <span className="w-2 h-2 bg-emerald-500 rounded-full animate-pulse"></span>
-                  <span className="text-xs font-bold text-indigo-700">12/30 Applications Today</span>
+                  <span className="text-xs font-bold text-indigo-700">{applications.filter(a => a.date === new Date().toLocaleDateString('en-US', { month: 'short', day: 'numeric' })).length}/30 Applications Today</span>
               </div>
               <div className="w-10 h-10 bg-slate-200 rounded-full overflow-hidden border-2 border-white shadow-sm">
                  <img src="https://api.dicebear.com/7.x/avataaars/svg?seed=Felix" alt="User" />
@@ -135,18 +155,26 @@ function App() {
         <div className="flex-1 overflow-y-auto relative p-6">
            {currentView === 'discovery' && (
              <div className="h-full flex flex-col items-center justify-center">
-                <JobDeck 
-                  initialJobs={MOCK_JOBS} 
-                  userGradYear={userGradYear}
-                  onJobSelect={setSelectedJob}
-                  onDeckEmpty={() => console.log("Deck empty!")}
-                />
+                {loading ? (
+                  <div className="flex flex-col items-center gap-2 text-indigo-600">
+                    <Loader2 className="w-8 h-8 animate-spin" />
+                    <span className="font-medium">Finding best matches...</span>
+                  </div>
+                ) : (
+                  <JobDeck 
+                    initialJobs={jobs} 
+                    userGradYear={userGradYear}
+                    onJobSelect={setSelectedJob}
+                    onDeckEmpty={() => console.log("Deck empty!")}
+                    onSwipeAction={handleSwipe}
+                  />
+                )}
              </div>
            )}
 
            {currentView === 'tracker' && (
               // @ts-ignore
-             <Tracker applications={MOCK_APPLICATIONS} />
+             <Tracker applications={applications} />
            )}
 
            {currentView === 'profile' && (
