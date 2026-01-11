@@ -4,7 +4,7 @@ import { Check, X, Briefcase, GraduationCap } from 'lucide-react';
 import { twMerge } from 'tailwind-merge';
 
 export interface Job {
-  id: string;
+  _id: string;
   title: string;
   company: string;
   matchScore: number;

@@ -7,7 +7,7 @@ import { LayoutGrid, Layers, User, Settings, Loader2 } from 'lucide-react';
 import { clsx } from 'clsx';
 import { api } from './services/api';
 
-// Mock Applications (Removed)
+const CURRENT_USER_ID = '6963fe98a7dd031642764502';
 
 type View = 'discovery' | 'tracker' | 'profile';
 
@@ -15,9 +15,9 @@ function App() {
   const [currentView, setCurrentView] = useState<View>('discovery');
   const [selectedJob, setSelectedJob] = useState<Job | null>(null);
   const [jobs, setJobs] = useState<Job[]>([]);
-  const [applications, setApplications] = useState<any[]>([]); // New state for apps
+  const [applications, setApplications] = useState<any[]>([]); 
   const [loading, setLoading] = useState(true);
-  const [userId, setUserId] = useState<string | null>(null);
+  const [userId, setUserId] = useState<string>(CURRENT_USER_ID);
   
   // User Profile Data
   const userGradYear = 2026;
@@ -25,28 +25,11 @@ function App() {
   // Fetch Data Function
   const loadData = async () => {
       try {
-        const [jobsData, userData] = await Promise.all([
-            api.getJobs(),
-            api.getUser()
-        ]);
+        const response = await fetch('http://localhost:5000/api/jobs');
+        const jobsData = await response.json();
         
-        const formattedJobs = jobsData.map((j: any) => ({ ...j, id: j._id }));
-        setJobs(formattedJobs);
-        setUserId(userData._id);
-
-        // Fetch applications if user exists
-        if (userData._id) {
-            const appsData = await api.getApplications(userData._id);
-            // Format for Tracker: extracting company/role from the populated jobId
-            const formattedApps = appsData.map((app: any) => ({
-                id: app._id,
-                company: app.jobId.company,
-                role: app.jobId.title,
-                status: app.status,
-                date: new Date(app.createdAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
-            }));
-            setApplications(formattedApps);
-        }
+        setJobs(jobsData);
+        setUserId(CURRENT_USER_ID);
 
       } catch (err) {
         console.error("Failed to load data", err);
@@ -61,26 +44,8 @@ function App() {
   }, []);
 
   const handleSwipe = async (direction: 'right' | 'left', job: Job) => {
-    if (direction === 'right' && userId) {
-       try {
-         await api.apply(userId, job.id);
-         console.log(`Applied to ${job.company}`);
-         // Refresh applications list quietly
-         const appsData = await api.getApplications(userId);
-         const formattedApps = appsData.map((app: any) => ({
-            id: app._id,
-            company: app.jobId.company,
-            role: app.jobId.title,
-            status: app.status,
-            date: new Date(app.createdAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
-        }));
-        setApplications(formattedApps);
-       } catch (err) {
-         console.error("Failed to apply", err);
-       }
-    } else if (!userId) {
-        console.error("User ID not found, cannot apply");
-    }
+    // Logic handled in JobDeck
+    console.log(`Swiped ${direction} on ${job.title}`);
   };
 
   return (
@@ -106,7 +71,7 @@ function App() {
             onClick={() => setCurrentView('tracker')}
             icon={Layers} 
             label="Tracker" 
-            badge={applications.length}
+            badge={applications.length > 0 ? applications.length : undefined}
           />
           <NavButton 
             active={currentView === 'profile'} 
@@ -164,6 +129,7 @@ function App() {
                   <JobDeck 
                     initialJobs={jobs} 
                     userGradYear={userGradYear}
+                    userId={userId}
                     onJobSelect={setSelectedJob}
                     onDeckEmpty={() => console.log("Deck empty!")}
                     onSwipeAction={handleSwipe}
@@ -173,8 +139,7 @@ function App() {
            )}
 
            {currentView === 'tracker' && (
-              // @ts-ignore
-             <Tracker applications={applications} />
+             <Tracker userId={userId} />
            )}
 
            {currentView === 'profile' && (

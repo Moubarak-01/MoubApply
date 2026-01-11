@@ -1,9 +1,9 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { Clock, Loader2, CheckCircle2, AlertCircle } from 'lucide-react';
 import { clsx } from 'clsx';
 
 interface Application {
-  id: string;
+  _id: string;
   company: string;
   role: string;
   status: 'Queued' | 'Processing' | 'Applied' | 'Action Needed';
@@ -18,11 +18,35 @@ const statusConfig = {
 };
 
 interface TrackerProps {
-  applications: Application[];
+  userId: string;
 }
 
-export const Tracker: React.FC<TrackerProps> = ({ applications }) => {
+export const Tracker: React.FC<TrackerProps> = ({ userId }) => {
+  const [applications, setApplications] = useState<Application[]>([]);
   const columns: (keyof typeof statusConfig)[] = ['Queued', 'Processing', 'Applied', 'Action Needed'];
+
+  useEffect(() => {
+    const fetchApplications = async () => {
+      try {
+        const response = await fetch(`http://localhost:5000/api/applications?userId=${userId}`);
+        const data = await response.json();
+        const formattedApps = data.map((app: any) => ({
+          _id: app._id,
+          company: app.jobId.company,
+          role: app.jobId.title,
+          status: app.status,
+          date: new Date(app.createdAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
+        }));
+        setApplications(formattedApps);
+      } catch (error) {
+        console.error('Error fetching applications:', error);
+      }
+    };
+
+    if (userId) {
+      fetchApplications();
+    }
+  }, [userId]);
 
   return (
     <div className="flex h-full gap-4 overflow-x-auto p-4 bg-slate-50/50">
@@ -42,7 +66,7 @@ export const Tracker: React.FC<TrackerProps> = ({ applications }) => {
 
             <div className="flex-1 overflow-y-auto flex flex-col gap-3">
               {apps.map((app) => (
-                <div key={app.id} className="bg-white p-4 rounded-xl shadow-sm border border-slate-100 hover:shadow-md transition-shadow">
+                <div key={app._id} className="bg-white p-4 rounded-xl shadow-sm border border-slate-100 hover:shadow-md transition-shadow">
                   <h4 className="font-bold text-slate-800">{app.company}</h4>
                   <p className="text-sm text-slate-500 mb-2">{app.role}</p>
                   <div className="flex items-center justify-between text-xs text-slate-400">

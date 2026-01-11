@@ -5,12 +5,13 @@ import { JobCard, type Job } from './JobCard';
 interface JobDeckProps {
   initialJobs: Job[];
   userGradYear: number;
+  userId: string;
   onJobSelect: (job: Job) => void;
   onDeckEmpty: () => void;
   onSwipeAction?: (direction: 'right' | 'left', job: Job) => void;
 }
 
-export const JobDeck: React.FC<JobDeckProps> = ({ initialJobs, userGradYear, onJobSelect, onDeckEmpty, onSwipeAction }) => {
+export const JobDeck: React.FC<JobDeckProps> = ({ initialJobs, userGradYear, userId, onJobSelect, onDeckEmpty, onSwipeAction }) => {
   const [jobs, setJobs] = useState<Job[]>(initialJobs);
 
   // Update internal state when initialJobs changes (e.g. after API load)
@@ -18,19 +19,33 @@ export const JobDeck: React.FC<JobDeckProps> = ({ initialJobs, userGradYear, onJ
     setJobs(initialJobs);
   }, [initialJobs]);
 
-  const handleSwipe = (direction: 'right' | 'left', job: Job) => {
+  const handleSwipe = async (direction: 'right' | 'left', job: Job) => {
     if (onSwipeAction) {
       onSwipeAction(direction, job);
     }
 
     if (direction === 'right') {
       console.log(`Apply to ${job.company}`);
+      try {
+        await fetch('http://localhost:5000/api/applications', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            userId: userId,
+            jobId: job._id,
+          }),
+        });
+      } catch (error) {
+        console.error('Error applying to job:', error);
+      }
     } else {
       console.log(`Reject ${job.company}`);
     }
 
     setJobs((prev) => {
-      const newJobs = prev.filter((j) => j.id !== job.id);
+      const newJobs = prev.filter((j) => j._id !== job._id);
       if (newJobs.length === 0) {
         onDeckEmpty();
       }
@@ -56,7 +71,7 @@ export const JobDeck: React.FC<JobDeckProps> = ({ initialJobs, userGradYear, onJ
              
              return (
               <JobCard
-                key={job.id}
+                key={job._id}
                 job={job}
                 userGradYear={userGradYear}
                 onSwipe={handleSwipe}
