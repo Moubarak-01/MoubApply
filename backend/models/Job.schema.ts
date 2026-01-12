@@ -5,6 +5,7 @@ export interface IJob extends Document {
   company: string;
   rawDescription: string;
   applyLink?: string;
+  externalId?: string;
   matchScore: number;
   tags: string[];
   gradYearReq: number;
@@ -22,6 +23,7 @@ const JobSchema: Schema = new Schema({
   company: { type: String, required: true },
   rawDescription: { type: String, required: true },
   applyLink: { type: String },
+  externalId: { type: String, unique: true },
   matchScore: { type: Number, default: 0 },
   tags: [{ type: String }],
   gradYearReq: { type: Number, required: true },

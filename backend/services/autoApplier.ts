@@ -1,4 +1,5 @@
 import { chromium } from 'playwright';
+import path from 'path';
 import { User } from '../models/User.schema';
 import { Job } from '../models/Job.schema';
 import { Application, ApplicationStatus } from '../models/Application.schema';
@@ -29,40 +30,89 @@ export const autoApply = async (applicationId: string) => {
     console.log(`Navigating to: ${job.applyLink}`);
     await page.goto(job.applyLink, { waitUntil: 'networkidle' });
 
-    // 4. Fill Common Fields (Heuristics for Greenhouse/Lever)
-    // First Name
-    await page.getByLabel(/First Name/i).fill(user.name.split(' ')[0]).catch(() => {});
-    await page.getByLabel(/Last Name/i).fill(user.name.split(' ').slice(1).join(' ')).catch(() => {});
+    // 4. Fill Common Fields (Heuristics for Greenhouse/Lever/Workday)
     
-    // Email
-    await page.getByLabel(/Email/i).fill(user.email).catch(() => {});
+    // Names
+    const firstName = user.name.split(' ')[0];
+    const lastName = user.name.split(' ').slice(1).join(' ') || firstName;
+
+    const nameMappings = [
+        { label: /First Name/i, value: firstName },
+        { label: /Last Name/i, value: lastName },
+        { label: /Full Name/i, value: user.name },
+        { label: /Email/i, value: user.email },
+        { label: /Phone/i, value: '945-276-8717' }, // Using user's real phone from resume if available
+        { label: /LinkedIn/i, value: 'https://linkedin.com/in/moubarak-ali-kparah' },
+        { label: /GitHub/i, value: 'https://github.com/Moubarak-01' },
+        { label: /Website/i, value: 'https://github.com/Moubarak-01' },
+    ];
+
+    for (const mapping of nameMappings) {
+        try {
+            await page.getByLabel(mapping.label).fill(mapping.value, { timeout: 2000 });
+        } catch (e) {
+            // Try by placeholder if label fails
+            try {
+                await page.getByPlaceholder(mapping.label).fill(mapping.value, { timeout: 1000 });
+            } catch (e2) {}
+        }
+    }
+
+    // Cover Letter (if available)
+    if (application.coverLetter) {
+        console.log('Filling cover letter...');
+        const clSelectors = [
+            /Cover Letter/i,
+            /Additional Information/i,
+            /Comments/i,
+            /Message to Hiring Manager/i
+        ];
+        
+        for (const sel of clSelectors) {
+            try {
+                await page.getByLabel(sel).fill(application.coverLetter, { timeout: 2000 });
+                break; // Stop after first successful fill
+            } catch (e) {
+                try {
+                    await page.getByPlaceholder(sel).fill(application.coverLetter, { timeout: 1000 });
+                    break;
+                } catch (e2) {}
+            }
+        }
+    }
+
+    // Resume Upload (Tailored vs Master)
+    let fullPath: string | null = null;
     
-    // Phone (Hardcoded for now, add to User schema later)
-    await page.getByLabel(/Phone/i).fill('555-0123').catch(() => {});
+    if (application.tailoredPdfUrl) {
+        // application.tailoredPdfUrl is like "/generated_pdfs/tailored_..."
+        // We need to map this to the actual file on disk
+        const relativePath = application.tailoredPdfUrl.replace(/^\//, ''); // remove leading slash
+        fullPath = path.join(process.cwd(), relativePath);
+    } else if (user.resumes && user.resumes.length > 0) {
+        // user.resumes[0].path is like "/uploads/..."
+        const relativePath = user.resumes[0].path.replace(/^\//, '');
+        fullPath = path.join(process.cwd(), relativePath);
+    }
 
-    // LinkedIn (Heuristic)
-    await page.getByLabel(/LinkedIn/i).fill('linkedin.com/in/demo-user').catch(() => {});
-
-    // Resume Upload (Find file input)
-    // We pick the first resume from the user's profile if available
-    if (user.resumes && user.resumes.length > 0) {
-        const resumePath = user.resumes[0].path; // e.g. /uploads/filename
-        const fullPath = process.cwd() + resumePath; 
+    if (fullPath && fs.existsSync(fullPath)) {
         console.log(`Uploading resume from: ${fullPath}`);
         
         const fileInput = await page.locator('input[type="file"]');
         if (await fileInput.count() > 0) {
              await fileInput.first().setInputFiles(fullPath);
         }
+    } else {
+        console.warn(`Resume file not found at: ${fullPath}`);
     }
 
     // 5. Success (Mocked for now - we don't actually click submit to avoid spamming)
     console.log('Form filled. Waiting 5 seconds before closing...');
     await page.waitForTimeout(5000);
 
-    // Update Status to Applied (or Action Needed if we want user review)
-    // For now, let's say "Action Needed" so user can review and click submit
-    application.status = ApplicationStatus.ACTION_NEEDED;
+    // Update Status to Applied
+    application.status = ApplicationStatus.APPLIED;
+    application.appliedAt = new Date();
     await application.save();
 
   } catch (error) {

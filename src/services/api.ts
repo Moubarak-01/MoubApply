@@ -71,5 +71,24 @@ export const api = {
     });
     if (!response.ok) throw new Error('AI Chat failed');
     return response.json();
+  },
+
+  // Tailor Resume
+  tailorResume: async (appId: string) => {
+    const response = await fetch(`${API_URL}/applications/${appId}/tailor`, {
+        method: 'POST'
+    });
+    if (!response.ok) throw new Error('Tailoring failed');
+    return response.json();
+  },
+
+  deleteAccount: async (userId: string) => {
+    const response = await fetch(`${API_URL}/auth/delete-account`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ userId })
+    });
+    if (!response.ok) throw new Error('Deletion failed');
+    return response.json();
   }
 };

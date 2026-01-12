@@ -1,83 +1,110 @@
+import axios from 'axios';
 import { Job } from '../models/Job.schema';
 import { User } from '../models/User.schema';
 import { enrichJobWithAI } from './aiMatcher';
 
-const MOCK_COMPANIES = ['Airbnb', 'Stripe', 'Netflix', 'Vercel', 'Linear', 'Coinbase', 'DoorDash', 'Uber', 'Notion', 'Figma'];
-const MOCK_ROLES = ['Frontend Engineer Intern', 'Backend Engineer Intern', 'Full Stack Intern', 'Software Engineer Intern', 'Product Engineering Intern'];
-const MOCK_LOCATIONS = ['Remote', 'San Francisco, CA', 'New York, NY', 'Seattle, WA', 'Austin, TX'];
+const COMPANY_TOKENS = [
+  'notion', 'figma', 'stripe', 'airbnb', 'uber', 'pinterest', 
+  'coinbase', 'mongodb', 'datadog', 'robinhood', 'snapchat', 'doordash', 'lyft'
+];
 
-const generateMockDescription = (company: string, role: string) => {
-  return `
-    ${company} is looking for a ${role} to join our team for Summer 2026.
-    
-    About the Role:
-    You will work directly with senior engineers to build features that impact millions of users. 
-    We are looking for someone who is passionate about ${role.includes('Frontend') ? 'React and Design Systems' : 'distributed systems and API design'}.
-    
-    Requirements:
-    - Currently pursuing a degree in CS or related field.
-    - Experience with ${role.includes('Frontend') ? 'TypeScript, React, and CSS' : 'Node.js, Go, or Python'}.
-    - Strong communication skills.
-    
-    Nice to have:
-    - Previous internship experience.
-    - Open source contributions.
-  `;
-};
+const ROLE_KEYWORDS = [
+  'Software', 'Engineer', 'Developer', 'AI', 'Artificial Intelligence', 
+  'Machine Learning', 'Data Science', 'Backend'
+];
 
-export const ingestJobs = async (query: string) => {
-  console.log(`Generating mock jobs for query: ${query}`);
+const sleep = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
+
+/**
+ * Ingests jobs from Greenhouse boards for specific high-tier tech companies.
+ * Filters for tech internships based on title keywords.
+ */
+export const ingestJobs = async (userId?: string, query?: string) => {
+  console.log("🔍 Starting Universal Greenhouse Job Ingestion...");
   
-  // Get default user for matching
-  const user = await User.findOne();
-  if (!user) console.warn("No user found for auto-matching.");
+  let totalNewJobs = 0;
+  
+  // Try to find a valid user for matching
+  let matchingUser = null;
+  if (userId) {
+      matchingUser = await User.findById(userId);
+  }
+  if (!matchingUser) {
+      matchingUser = await User.findOne({ masterResumeText: { $exists: true, $ne: "" } });
+  }
 
-  let newJobsCount = 0;
+  for (const token of COMPANY_TOKENS) {
+    try {
+      console.log(`🏢 [Greenhouse] Processing: ${token.toUpperCase()}...`);
+      const response = await axios.get(`https://boards-api.greenhouse.io/v1/boards/${token}/jobs?content=true`);
+      const ghJobs = response.data.jobs || [];
+      
+      for (const ghJob of ghJobs) {
+        const title = ghJob.title;
+        const lowerTitle = title.toLowerCase();
 
-  for (let i = 0; i < 5; i++) { // Generate 5 at a time
-    const company = MOCK_COMPANIES[Math.floor(Math.random() * MOCK_COMPANIES.length)];
-    const role = MOCK_ROLES[Math.floor(Math.random() * MOCK_ROLES.length)];
-    const location = MOCK_LOCATIONS[Math.floor(Math.random() * MOCK_LOCATIONS.length)];
-    
-    // Create a deterministic title/company combo for deduplication
-    const title = `${role} - Summer 2026`;
-    
-    // Deduplication
-    const existingJob = await Job.findOne({
-      title: title,
-      company: company,
-    });
+        // Smart Filtering: (Intern OR Internship) AND (Software OR AI OR ML OR Data Science)
+        const isInternship = lowerTitle.includes('intern') || lowerTitle.includes('internship');
+        const matchesTech = ROLE_KEYWORDS.some(k => lowerTitle.includes(k.toLowerCase()));
+        
+        // If a specific query is provided, prioritize it, otherwise use default filter
+        const queryMatch = query ? lowerTitle.includes(query.toLowerCase()) : (isInternship && matchesTech);
 
-    if (!existingJob) {
-      const newJob = new Job({
-        title: title,
-        company: company,
-        rawDescription: generateMockDescription(company, role),
-        applyLink: `https://boards.greenhouse.io/${company.toLowerCase()}/jobs/${Math.floor(Math.random() * 1000000)}`, 
-        matchScore: 0, 
-        tags: [location, 'Summer 2026', 'Mock'],
-        gradYearReq: 2026, 
-        aiSummary: {
-          whyYouWillLoveIt: '',
-          theCatch: '',
-          topSkills: [],
-        },
-      });
+        if (!queryMatch) continue;
 
-      await newJob.save();
-      newJobsCount++;
+        // Deduplication (using Greenhouse ID)
+        const existingJob = await Job.findOne({ externalId: ghJob.id.toString() });
+        if (existingJob) continue;
 
-      // AUTOMATIC AI MATCHING
-      if (user) {
-          try {
-              console.log(`Auto-matching ${title}...`);
-              await enrichJobWithAI(newJob._id.toString(), user._id.toString());
-          } catch (err) {
-              console.error(`Failed to auto-match job ${newJob._id}`, err);
-          }
+        try {
+            const newJob = new Job({
+              title: title,
+              company: token.charAt(0).toUpperCase() + token.slice(1),
+              rawDescription: ghJob.content || 'No description provided.',
+              applyLink: ghJob.absolute_url,
+              externalId: ghJob.id.toString(),
+              matchScore: 0,
+              tags: [
+                ghJob.location?.name || 'Global',
+                'Internship',
+                'Greenhouse'
+              ],
+              gradYearReq: 2026,
+              aiSummary: {
+                whyYouWillLoveIt: '',
+                theCatch: '',
+                topSkills: [],
+              },
+            });
+
+            await newJob.save();
+            totalNewJobs++;
+
+            // Trigger AI Match immediately if user has a resume
+            if (matchingUser && matchingUser.masterResumeText) {
+                console.log(`🤖 Auto-matching: ${title} @ ${newJob.company}`);
+                // Rate Limit Protection: sleep 3 seconds between AI calls
+                await sleep(3000);
+                await enrichJobWithAI(newJob._id.toString(), matchingUser._id.toString()).catch((err) => {
+                    console.error(`❌ AI match failed for ${title}:`, err.message);
+                });
+            }
+        } catch (saveErr: any) {
+            if (saveErr.code === 11000) {
+                console.log(`ℹ️ Job already exists: ${title}`);
+            } else {
+                console.error(`❌ Failed to save job ${title}:`, saveErr.message);
+            }
+        }
       }
+      console.log(`✅ ${token.toUpperCase()} finished.`);
+    } catch (error: any) {
+      console.error(`❌ Failed to process company ${token}:`, error.message);
     }
   }
 
-  return { message: `Successfully generated and matched ${newJobsCount} new mock jobs.` };
+  return {
+    message: `Ingestion complete. Found ${totalNewJobs} new tech internships.`,
+    newJobs: totalNewJobs
+  };
 };

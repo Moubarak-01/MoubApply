@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
-import { Clock, Loader2, CheckCircle2, AlertCircle, Zap } from 'lucide-react';
+import { Clock, Loader2, CheckCircle2, AlertCircle, Zap, Wand2, Eye } from 'lucide-react';
 import { clsx } from 'clsx';
+import { api } from '../services/api';
 
 interface Application {
   _id: string;
@@ -8,6 +9,8 @@ interface Application {
   role: string;
   status: 'Queued' | 'Processing' | 'Applied' | 'Action Needed';
   date: string;
+  tailoredPdfUrl?: string;
+  coverLetter?: string;
 }
 
 const statusConfig = {
@@ -19,11 +22,13 @@ const statusConfig = {
 
 interface TrackerProps {
   userId: string;
+  onReview: (app: Application) => void;
+  onApplicationsChange?: (apps: Application[]) => void;
 }
 
-export const Tracker: React.FC<TrackerProps> = ({ userId }) => {
+export const Tracker: React.FC<TrackerProps> = ({ userId, onReview, onApplicationsChange }) => {
   const [applications, setApplications] = useState<Application[]>([]);
-  const [applyingId, setApplyingId] = useState<string | null>(null);
+  const [loadingId, setLoadingId] = useState<string | null>(null);
   const columns: (keyof typeof statusConfig)[] = ['Queued', 'Processing', 'Applied', 'Action Needed'];
 
   const fetchApplications = async () => {
@@ -35,33 +40,42 @@ export const Tracker: React.FC<TrackerProps> = ({ userId }) => {
         company: app.jobId.company,
         role: app.jobId.title,
         status: app.status,
-        date: new Date(app.createdAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
+        date: new Date(app.createdAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }),
+        tailoredPdfUrl: app.tailoredPdfUrl,
+        coverLetter: app.coverLetter
       }));
       setApplications(formattedApps);
+      if (onApplicationsChange) onApplicationsChange(formattedApps);
     } catch (error) {
       console.error('Error fetching applications:', error);
     }
   };
 
   useEffect(() => {
-    if (userId) {
-      fetchApplications();
-    }
+    if (userId) fetchApplications();
   }, [userId]);
 
-  const handleAutoApply = async (appId: string) => {
-      setApplyingId(appId);
+  const handleTailor = async (appId: string) => {
+      setLoadingId(appId);
       try {
-          await fetch(`http://localhost:5000/api/applications/${appId}/apply`, {
-              method: 'POST'
-          });
-          // Optimistic update or refresh
+          await api.tailorResume(appId);
+          await fetchApplications();
+      } catch (err) {
+          alert("Tailoring failed. Check terminal.");
+      } finally {
+          setLoadingId(null);
+      }
+  };
+
+  const handleAutoApply = async (appId: string) => {
+      setLoadingId(appId);
+      try {
+          await fetch(`http://localhost:5000/api/applications/${appId}/apply`, { method: 'POST' });
           await fetchApplications();
       } catch (error) {
-          console.error("Auto apply failed", error);
-          alert("Failed to start auto-apply");
+          alert("Auto apply failed");
       } finally {
-          setApplyingId(null);
+          setLoadingId(null);
       }
   };
 
@@ -86,28 +100,40 @@ export const Tracker: React.FC<TrackerProps> = ({ userId }) => {
                 <div key={app._id} className="bg-white p-4 rounded-xl shadow-sm border border-slate-100 hover:shadow-md transition-shadow">
                   <h4 className="font-bold text-slate-800">{app.company}</h4>
                   <p className="text-sm text-slate-500 mb-2">{app.role}</p>
-                  <div className="flex items-center justify-between text-xs text-slate-400 mt-3">
-                    <span>{app.date}</span>
+                  <div className="flex flex-wrap items-center gap-2 mt-3">
                     
                     {status === 'Queued' && (
                         <button 
-                            onClick={() => handleAutoApply(app._id)}
-                            disabled={applyingId === app._id}
-                            className="flex items-center gap-1 bg-indigo-600 text-white px-3 py-1.5 rounded-lg text-xs font-bold hover:bg-indigo-700 disabled:opacity-50 transition-colors shadow-sm shadow-indigo-200"
+                            onClick={() => handleTailor(app._id)}
+                            disabled={!!loadingId}
+                            className="flex items-center gap-1 bg-indigo-600 text-white px-3 py-1.5 rounded-lg text-[10px] font-bold hover:bg-indigo-700 disabled:opacity-50 transition-colors shadow-sm"
                         >
-                            {applyingId === app._id ? <Loader2 className="w-3 h-3 animate-spin"/> : <Zap className="w-3 h-3 fill-current" />}
-                            Auto-Apply
+                            {loadingId === app._id ? <Loader2 className="w-3 h-3 animate-spin"/> : <Wand2 className="w-3 h-3" />}
+                            Tailor & Prep
                         </button>
                     )}
 
-                    {status === 'Applied' && (
-                        <span className="text-emerald-600 font-medium">View Confirmation</span>
+                    {status === 'Action Needed' && (
+                        <>
+                            <button 
+                                onClick={() => onReview(app)}
+                                className="flex items-center gap-1 bg-slate-100 text-slate-700 px-3 py-1.5 rounded-lg text-[10px] font-bold hover:bg-slate-200 transition-colors"
+                            >
+                                <Eye className="w-3 h-3" />
+                                Review
+                            </button>
+                            <button 
+                                onClick={() => handleAutoApply(app._id)}
+                                disabled={!!loadingId}
+                                className="flex items-center gap-1 bg-emerald-600 text-white px-3 py-1.5 rounded-lg text-[10px] font-bold hover:bg-emerald-700 disabled:opacity-50 transition-colors"
+                            >
+                                {loadingId === app._id ? <Loader2 className="w-3 h-3 animate-spin"/> : <Zap className="w-3 h-3 fill-current" />}
+                                Auto-Apply
+                            </button>
+                        </>
                     )}
-                     {status === 'Action Needed' && (
-                        <button className="bg-rose-100 text-rose-600 px-2 py-1 rounded font-medium hover:bg-rose-200">
-                            Resolve
-                        </button>
-                    )}
+
+                    <span className="ml-auto text-[10px] text-slate-400">{app.date}</span>
                   </div>
                 </div>
               ))}

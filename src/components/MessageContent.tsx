@@ -34,7 +34,7 @@ const MessageContent: React.FC<MessageContentProps> = ({ content, isUser }) => {
           h2: ({ node, ...props }) => <h2 className="text-base font-bold mb-2 mt-3" {...props} />,
           h3: ({ node, ...props }) => <h3 className="text-sm font-bold mb-1 mt-2" {...props} />,
           code: ({ node, inline, className, children, ...props }: any) => {
-            const match = /language-(\w+)/.exec(className || '');
+            /language-(\w+)/.exec(className || '');
             return !inline ? (
               <div className="bg-slate-900 text-slate-50 p-3 rounded-lg my-2 overflow-x-auto border border-slate-700">
                 <code className={className} {...props}>

@@ -3,14 +3,16 @@ import { Loader2, MessageSquare, Send, Trash2, X, Copy, Edit2, Check, GripHorizo
 import { clsx } from 'clsx';
 import MessageContent from './MessageContent';
 
-export interface AiAssistantRef {
+export interface AssistantRef {
   openChat: () => void;
   toggleVisibility: () => void;
   toggleOpen: () => void;
 }
 
-interface AiAssistantProps {
+interface AssistantProps {
   userId: string | null;
+  jobs?: any[];
+  applications?: any[];
 }
 
 interface Message {
@@ -23,7 +25,7 @@ const MODELS = [
     { id: 'google/gemini-2.0-flash-exp:free', name: 'Gemini 2.0 Flash (Free)' },
     { id: 'anthropic/claude-3.7-sonnet:thinking', name: 'Claude 3.7 Thinking' },
     { id: 'anthropic/claude-3.7-sonnet', name: 'Claude 3.7 Sonnet' },
-    { id: 'anthropic/claude-opus-4.5', name: 'Claude 4.5 Opus' },
+    { id: 'anthropic/claude-4.5-opus', name: 'Claude 4.5 Opus' },
     { id: 'openai/o3-mini', name: 'OpenAI o3-mini' },
     { id: 'deepseek/deepseek-r1', name: 'DeepSeek R1' },
     { id: 'meta-llama/llama-3.3-70b-instruct:free', name: 'Llama 3.3 70B' },
@@ -46,7 +48,7 @@ const MODELS = [
     { id: 'qwen/qwen-2.5-72b-instruct:free', name: 'Qwen 2.5 72B (Free)' }
 ];
 
-export const AiAssistant = forwardRef<AiAssistantRef, AiAssistantProps>(({ userId }, ref) => {
+export const Assistant = forwardRef<AssistantRef, AssistantProps>(({ userId, jobs = [], applications = [] }, ref) => {
   const [isOpen, setIsOpen] = useState(false);
   const [isVisible, setIsVisible] = useState(true);
   const [copiedId, setCopiedId] = useState<number | null>(null);
@@ -167,7 +169,15 @@ export const AiAssistant = forwardRef<AiAssistantRef, AiAssistantProps>(({ userI
       const response = await fetch('http://localhost:5000/api/ai/assistant', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ userId, message: userText, model: randomModel })
+          body: JSON.stringify({ 
+              userId, 
+              message: userText, 
+              model: randomModel,
+              context: {
+                  jobs: jobs.slice(0, 10), // Limit context size
+                  applications: applications.slice(0, 10)
+              }
+          })
       });
 
       if (!response.ok || !response.body) throw new Error("Stream failed");
@@ -239,7 +249,7 @@ export const AiAssistant = forwardRef<AiAssistantRef, AiAssistantProps>(({ userI
       ) : (
         <div className="w-full h-full bg-white rounded-2xl shadow-2xl flex flex-col border border-slate-200 overflow-hidden relative">
           <div onMouseDown={handleMouseDown} className="p-4 bg-indigo-600 text-white flex justify-between items-center cursor-grab active:cursor-grabbing select-none">
-            <div className="flex items-center gap-2"><MessageSquare className="w-5 h-5" /><h3 className="font-bold text-sm uppercase tracking-widest">Assistant</h3></div>
+            <div className="flex items-center gap-2"><MessageSquare className="w-5 h-5" /><h3 className="font-bold text-sm uppercase tracking-widest">Career Assistant</h3></div>
             <div className="flex items-center gap-2">
                 <button onClick={() => setMessages([{ role: 'model', text: "Chat history cleared. How can I help?" }])} className="p-1 hover:bg-indigo-50 rounded-lg text-indigo-100 hover:text-white transition-colors" title="Clear Chat"><Trash2 className="w-4 h-4" /></button>
                 <button onClick={() => setIsOpen(false)} className="p-1 hover:bg-indigo-50 rounded-lg text-indigo-100 hover:text-white transition-colors"><X className="w-5 h-5" /></button>
@@ -252,8 +262,8 @@ export const AiAssistant = forwardRef<AiAssistantRef, AiAssistantProps>(({ userI
                     <div className="relative max-w-[85%]">
                         <div className="bg-slate-100 text-slate-800 px-4 py-3 rounded-2xl rounded-tr-sm border border-slate-200 shadow-sm text-sm"><MessageContent content={msg.text} isUser={true} /></div>
                         <div className="absolute -left-12 top-1/2 -translate-y-1/2 flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                            <button onClick={() => handleEdit(msg.text, i)} className="p-1.5 text-slate-400 hover:text-indigo-600 rounded-lg transition-colors"><Edit2 className="w-3.5 h-3.5" /></button>
-                            <button onClick={() => handleCopy(msg.text, i)} className="p-1.5 text-slate-400 hover:text-indigo-600 rounded-lg transition-colors">{copiedId === i ? <Check className="w-3.5 h-3.5 text-emerald-500" /> : <Copy className="w-3.5 h-3.5" />}</button>
+                            <button onClick={() => handleEdit(msg.text, i)} className="p-1.5 text-slate-400 hover:text-indigo-600 rounded-lg transition-colors"><Edit2 className="w-3.5 h-3.5" /> </button>
+                            <button onClick={() => handleCopy(msg.text, i)} className="p-1.5 text-slate-400 hover:text-indigo-600 hover:bg-slate-50 rounded-lg transition-colors">{copiedId === i ? <Check className="w-3.5 h-3.5 text-emerald-500" /> : <Copy className="w-3.5 h-3.5" />}</button>
                         </div>
                     </div>
                 ) : (
@@ -287,5 +297,3 @@ export const AiAssistant = forwardRef<AiAssistantRef, AiAssistantProps>(({ userI
     </div>
   );
 });
-
-export default AiAssistant;

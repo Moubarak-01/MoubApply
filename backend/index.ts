@@ -24,7 +24,9 @@ import { User } from './models/User.schema';
 import { enrichJobWithAI } from './services/aiMatcher';
 import { ingestJobs } from './services/jobIngestor';
 import { autoApply } from './services/autoApplier';
-import { signup, login, getMe } from './services/auth';
+import { signup, login, getMe, deleteAccount } from './services/auth';
+import { tailorResume } from './services/resumeTailor';
+import { parseResumeToJSON } from './services/resumeParser';
 
 dotenv.config();
 
@@ -33,8 +35,9 @@ const PORT = process.env.PORT || 5000;
 
 app.use(cors());
 app.use(express.json());
-// Serve uploaded files statically
+// Serve uploaded files and generated PDFs statically
 app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
+app.use('/generated_pdfs', express.static(path.join(__dirname, 'generated_pdfs')));
 
 // --- CONFIGURATION ---
 
@@ -69,27 +72,31 @@ const upload = multer({
 // --- EPHEMERAL SESSION CLEANUP ---
 const clearUploadsOnStart = async () => {
     const uploadDir = path.join(__dirname, 'uploads');
+    const pdfDir = path.join(__dirname, 'generated_pdfs');
     
-    // 1. Clear File System
-    if (fs.existsSync(uploadDir)) {
-        fs.readdirSync(uploadDir).forEach(file => {
-            const filePath = path.join(uploadDir, file);
-            if (fs.lstatSync(filePath).isFile()) {
-                fs.unlinkSync(filePath);
-            }
-        });
-        console.log('🧹 Uploads directory cleared.');
-    } else {
-        fs.mkdirSync(uploadDir);
-    }
+    [uploadDir, pdfDir].forEach(dir => {
+        if (fs.existsSync(dir)) {
+            fs.readdirSync(dir).forEach(file => {
+                const filePath = path.join(dir, file);
+                if (fs.lstatSync(filePath).isFile()) {
+                    fs.unlinkSync(filePath);
+                }
+            });
+            console.log(`🧹 ${path.basename(dir)} directory cleared.`);
+        } else {
+            fs.mkdirSync(dir);
+        }
+    });
 
-    // 2. Clear Database References (Resumes only)
+    // 2. Database Cleanup (REMOVED: Do not wipe user data on restart)
+    /*
     try {
-        await User.updateMany({}, { $set: { resumes: [], masterResumeText: "" } });
+        await User.updateMany({}, { $set: { resumes: [], masterResumeText: "", structuredExperience: undefined } });
         console.log('🧹 User resumes reset in database.');
     } catch (e) {
         console.error("Cleanup failed", e);
     }
+    */
 };
 
 mongoose.connect(mongoUri)
@@ -107,11 +114,39 @@ mongoose.connect(mongoUri)
 app.post('/api/auth/signup', signup);
 app.post('/api/auth/login', login);
 app.get('/api/auth/me', getMe);
+app.post('/api/auth/delete-account', deleteAccount);
+
+// Tailor Resume Route
+app.post('/api/applications/:id/tailor', async (req: Request, res: Response): Promise<any> => {
+    try {
+        const applicationId = req.params.id as string;
+        const application = await Application.findById(applicationId);
+        if (!application) return res.status(404).json({ error: 'Application not found' });
+
+        // Update status to Processing
+        application.status = ApplicationStatus.PROCESSING;
+        await application.save();
+
+        // Run AI Tailoring
+        const result = await tailorResume(application.userId.toString(), application.jobId.toString());
+        
+        // Save results
+        application.tailoredPdfUrl = result.pdfUrl;
+        application.coverLetter = result.coverLetter;
+        application.status = ApplicationStatus.ACTION_NEEDED; // Move to Review state
+        await application.save();
+
+        res.json(application);
+    } catch (error: any) {
+        console.error('Tailoring Route Error:', error);
+        res.status(500).json({ error: 'Failed to tailor resume' });
+    }
+});
 
 // AI Assistant Chat Route (Streaming + Dynamic Model)
 app.post('/api/ai/assistant', async (req: Request, res: Response): Promise<any> => {
     try {
-        const { userId, message, model } = req.body;
+        const { userId, message, model, context } = req.body;
         const selectedModel = model || 'mistralai/mistral-small-3.1-24b-instruct:free';
         console.log(`🤖 AI Request | Model: ${selectedModel} | User: ${userId}`);
         
@@ -124,81 +159,127 @@ app.post('/api/ai/assistant', async (req: Request, res: Response): Promise<any> 
             ? `USER RESUME CONTENT:\n${user.masterResumeText}` 
             : "USER RESUME CONTENT: (None uploaded yet)";
 
+        const appStateContext = context ? `
+            CURRENT APP STATE:
+            - Recent Jobs: ${JSON.stringify(context.jobs || [])}
+            - Recent Applications: ${JSON.stringify(context.applications || [])}
+        ` : "";
+
         // SHARED SYSTEM INSTRUCTIONS (Ensures all models behave the same)
         const systemPrompt = `
-            You are the AI Assistant for "MoubApply". 
+            You are the AI Assistant for "MoubApply", a cutting-edge job application automation platform.
             
             CORE MISSION: Provide ultra-concise, high-utility answers. 
             
-            KNOWLEDGE BASE:
-            - Discovery: Swipe RIGHT to queue, LEFT to ignore.
-            - Tracker: Kanban board (Queued -> Processing -> Applied).
-            - Auto-Apply: "⚡" button uses Playwright bot to fill forms.
-            - Profile: Users upload resumes (PDF/DOCX).
-            - AI Matching: Analyze resumes vs jobs for 0-100% scores.
+            DETAILED KNOWLEDGE BASE & NEW FEATURES:
+            - Real-Time Discovery: The Discovery view now features a search bar to fetch REAL jobs from the JSearch API. Users can enter queries like "Frontend Developer" and pull live data.
+            - Mandatory Onboarding: New users must upload a resume before accessing core features. A "Resume Required" overlay guides them to the Profile section.
+            - Advanced Tailor & Prep: Uses AI to rewrite and format resumes into professional LaTeX. It features a robust fallback loop (Gemini -> Mistral -> Llama -> Qwen) to bypass rate limits or payment issues.
+            - Robust Parsing: Our engine parses resumes into structured JSON and automatically fixes common LaTeX escaping errors.
+            - Tracker & State Sync: The Tracker (Kanban board) is fully synced with the App state. The Assistant (you) always receives the latest jobs and application data in its context.
+            - Auto-Apply: The "⚡" button uses a Playwright-powered background bot to automate form filling.
+            - Clean Account Management: Users can permanently delete their accounts, which wipes all user data, database records, and physical resume files from the server.
 
             PRIORITY ORDER:
-            1. MoubApply App Features
-            2. User's Resume Content
-            3. General Career/Technical Knowledge
+            1. Recent MoubApply Updates & Features
+            2. Current App State (Jobs/Applications provided in context)
+            3. User's Resume Content
+            4. General Career/Technical Knowledge
 
             STRICT FORMATTING RULES:
             - NO PREAMBLES: Start the answer immediately. No "Sure!", "Here is...", or "I can help".
             - VISUAL CLARITY: Use tables for comparing data and bullet points for lists.
-            - MATH: Use $...$ for inline and $...$ for blocks. Keep variables inline.
+            - MATH: Use $...$ for inline and $$...$$ for blocks. Keep variables inline.
             - MAX CONCISENESS: If you can answer in 2 sentences, do not use 3.
 
             ${resumeContext}
+            ${appStateContext}
         `;
 
         res.setHeader('Content-Type', 'text/event-stream');
         res.setHeader('Cache-Control', 'no-cache');
         res.setHeader('Connection', 'keep-alive');
 
-        const response = await axios.post(
-            'https://openrouter.ai/api/v1/chat/completions',
-            {
-                model: selectedModel,
-                messages: [
-                    { role: 'system', content: systemPrompt }, // Enforce rules
-                    { role: 'user', content: message }
-                ],
-                stream: true,
-            },
-            {
-                headers: {
-                    'Authorization': `Bearer ${process.env.OPENROUTER_API_KEY}`,
-                    'Content-Type': 'application/json',
-                    'HTTP-Referer': 'https://moubapply.com',
-                    'X-Title': 'MoubApply'
-                },
-                responseType: 'stream'
-            }
-        );
+        const CHAT_MODELS = [
+            selectedModel,
+            'google/gemini-2.0-flash-exp:free',
+            'meta-llama/llama-3.3-70b-instruct:free',
+            'mistralai/mistral-small-3.1-24b-instruct:free'
+        ];
 
-        response.data.on('data', (chunk: Buffer) => {
-            const lines = chunk.toString().split('\n').filter(line => line.trim() !== '');
-            for (const line of lines) {
-                if (line === 'data: [DONE]') {
-                    res.write('data: [DONE]\n\n');
-                    res.end();
-                    return;
-                }
-                if (line.startsWith('data: ')) {
-                    const jsonStr = line.replace('data: ', '');
-                    try {
-                        const json = JSON.parse(jsonStr);
-                        const content = json.choices[0]?.delta?.content || '';
-                        if (content) {
-                            res.write(`data: ${JSON.stringify({ content })}\n\n`);
+        let streamSuccess = false;
+        let lastChatError: any = null;
+
+        for (const modelId of CHAT_MODELS) {
+            if (streamSuccess) break;
+            try {
+                console.log(`🤖 AI Chat trying model: ${modelId}`);
+                const response = await axios.post(
+                    'https://openrouter.ai/api/v1/chat/completions',
+                    {
+                        model: modelId,
+                        messages: [
+                            { role: 'system', content: systemPrompt },
+                            { role: 'user', content: message }
+                        ],
+                        stream: true,
+                    },
+                    {
+                        headers: {
+                            'Authorization': `Bearer ${process.env.OPENROUTER_API_KEY}`,
+                            'Content-Type': 'application/json',
+                            'HTTP-Referer': 'https://moubapply.com',
+                            'X-Title': 'MoubApply'
+                        },
+                        responseType: 'stream',
+                        timeout: 10000
+                    }
+                );
+
+                response.data.on('data', (chunk: Buffer) => {
+                    streamSuccess = true;
+                    const lines = chunk.toString().split('\n').filter(line => line.trim() !== '');
+                    for (const line of lines) {
+                        if (line === 'data: [DONE]') {
+                            res.write('data: [DONE]\n\n');
+                            res.end();
+                            return;
                         }
-                    } catch (e) {}
+                        if (line.startsWith('data: ')) {
+                            const jsonStr = line.replace('data: ', '');
+                            try {
+                                const json = JSON.parse(jsonStr);
+                                const content = json.choices[0]?.delta?.content || '';
+                                if (content) {
+                                    res.write(`data: ${JSON.stringify({ content })}\n\n`);
+                                }
+                            } catch (e) {}
+                        }
+                    }
+                });
+
+                // Wait for the stream to finish or fail
+                await new Promise((resolve, reject) => {
+                    response.data.on('end', resolve);
+                    response.data.on('error', reject);
+                });
+                
+                if (streamSuccess) break;
+
+            } catch (err: any) {
+                lastChatError = err;
+                console.warn(`🤖 Model ${modelId} failed for chat: ${err.message}`);
+                if (err.response?.status === 429) {
+                    console.log("Rate limited, trying next model...");
                 }
             }
-        });
+        }
 
-        response.data.on('end', () => res.end());
-        response.data.on('error', () => res.end());
+        if (!streamSuccess && !res.headersSent) {
+            res.write(`data: ${JSON.stringify({ content: "I'm currently receiving too many requests. Please try again in a moment." })}\n\n`);
+            res.write('data: [DONE]\n\n');
+            res.end();
+        }
 
     } catch (error: any) {
         console.error('❌ AI Assistant Error:', error.response?.data || error.message);
@@ -253,16 +334,46 @@ app.post('/api/applications/:id/apply', async (req: Request, res: Response): Pro
     }
 });
 
+// Clear Jobs Route
+app.delete('/api/jobs', async (req: Request, res: Response): Promise<any> => {
+    try {
+        await Job.deleteMany({});
+        res.json({ message: 'All jobs cleared' });
+    } catch (error) {
+        res.status(500).json({ error: 'Failed to clear jobs' });
+    }
+});
+
+let isIngesting = false;
+
 // Ingest Jobs Route
 app.post('/api/jobs/ingest', async (req: Request, res: Response): Promise<any> => {
     try {
-        const { query } = req.body;
-        const searchQuery = query || 'Software Engineer Intern'; 
+        const { clearFirst, userId, query } = req.body;
         
-        const result = await ingestJobs(searchQuery);
-        res.json(result);
+        if (isIngesting) {
+            return res.status(429).json({ error: 'Ingestion already in progress. Please wait.' });
+        }
+
+        isIngesting = true;
+
+        if (clearFirst) {
+            await Job.deleteMany({});
+            console.log("🧹 Cleared jobs before ingestion.");
+        }
+
+        // Call ingestJobs asynchronously with userId and query
+        ingestJobs(userId, query).then(result => {
+            console.log("🟢 Async Ingestion Result:", result.message);
+        }).catch(err => {
+            console.error("🔴 Async Ingestion Error:", err.message);
+        }).finally(() => {
+            isIngesting = false;
+        });
+
+        res.json({ message: 'Greenhouse & Adzuna job ingestion started in the background.' });
     } catch (error: any) {
-        console.error('Error ingesting jobs:', error);
+        console.error('Error starting job ingestion:', error);
         res.status(500).json({ error: error.message || 'Internal Server Error' });
     }
 });
@@ -329,9 +440,20 @@ app.post('/api/user/upload', upload.array('files', 6), async (req: Request, res:
         if (extractedText) {
             user.masterResumeText = extractedText;
             console.log("Updated masterResumeText.");
+            
+            // --- AI STRUCTURED PARSING ---
+            try {
+                const structuredData = await parseResumeToJSON(extractedText);
+                user.structuredExperience = structuredData;
+                user.markModified('structuredExperience'); // Ensure Mongoose sees the change
+                console.log("✅ AI successfully structured the user's career data.");
+            } catch (err) {
+                console.error("Failed to structure data:", err);
+            }
         }
         
-        await user.save();
+        const savedUser = await user.save();
+        console.log(`👤 User data saved. Structured data present: ${!!savedUser.structuredExperience}`);
 
         res.json({ 
             message: 'Upload complete', 
@@ -419,14 +541,14 @@ app.post('/api/applications', async (req: Request, res: Response): Promise<any> 
       return res.status(400).json({ error: 'userId and jobId are required' });
     }
 
-    const newApplication = new Application({
-      userId,
-      jobId,
-      status: ApplicationStatus.QUEUED,
-    });
+    // Use findOneAndUpdate with upsert to prevent duplicates
+    const application = await Application.findOneAndUpdate(
+      { userId, jobId },
+      { $setOnInsert: { status: ApplicationStatus.QUEUED } },
+      { upsert: true, new: true }
+    );
 
-    const savedApplication = await newApplication.save();
-    return res.status(201).json(savedApplication);
+    return res.status(201).json(application);
   } catch (error) {
     console.error('Error creating application:', error);
     return res.status(500).json({ error: 'Internal Server Error' });

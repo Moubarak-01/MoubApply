@@ -1,0 +1,96 @@
+
+\documentclass[letterpaper,11pt]{article}
+\usepackage{latexsym}
+\usepackage[empty]{fullpage}
+\usepackage{titlesec}
+\usepackage{marvosym}
+\usepackage[usenames,dvipsnames]{color}
+\usepackage{verbatim}
+\usepackage{enumitem}
+\usepackage[hidelinks]{hyperref}
+\usepackage{fancyhdr}
+\usepackage[english]{babel}
+\usepackage{tabularx}
+\usepackage{fontawesome5}
+\usepackage{multicol}
+\setlength{\multicolsep}{-3.0pt}
+\setlength{\columnsep}{-1pt}
+\input{glyphtounicode}
+\usepackage[margin=1.4cm]{geometry}
+\pagestyle{fancy}
+\fancyhf{}
+\fancyfoot{}
+\renewcommand{\headrulewidth}{0pt}
+\renewcommand{\footrulewidth}{0pt}
+\addtolength{\oddsidemargin}{-0.15in}
+\addtolength{\textwidth}{0.3in}
+\urlstyle{same}
+\raggedbottom
+\raggedright
+\setlength{\tabcolsep}{0in}
+\titleformat{\section}{\vspace{-4pt}\scshape\raggedright\large\bfseries}{}{0em}{}[\color{black}\titlerule \vspace{-5pt}]
+\pdfgentounicode=1
+\newcommand{\resumeItem}[1]{\item\small{{#1 \vspace{0pt}}}}
+\newcommand{\resumeSubheading}[4]{\vspace{-2pt}\item\begin{tabular*}{1.0\textwidth}[t]{l@{\extracolsep{\fill}}r}\textbf{#1} & \textbf{\small #2} \\ \textit{\small#3} & \textit{\small #4} \\ \end{tabular*}\vspace{-7pt}}
+\newcommand{\resumeProjectHeading}[2]{\item\begin{tabular*}{1.001\textwidth}{l@{\extracolsep{\fill}}r}\small#1 & \textbf{\small #2}\\\\end{tabular*}\vspace{-7pt}}
+\renewcommand\labelitemi{\vcenter{\hbox{\tiny$\bullet$}}}
+\renewcommand\labelitemii{\vcenter{\hbox{\tiny$\bullet$}}}
+\newcommand{\resumeSubHeadingListStart}{\begin{itemize}[leftmargin=0.0in, label={}]}
+\newcommand{\resumeSubHeadingListEnd}{\end{itemize}}\vspace{0pt}
+\newcommand{\resumeItemListStart}{\begin{itemize}}
+\newcommand{\resumeItemListEnd}{\end{itemize}}\vspace{-5pt}}
+
+\begin{document}
+
+%---HEADING---
+\begin{center}
+    {\Large \scshape Moubarak Clemenceau Ali-Kparah} \\ \vspace{2pt}
+    \footnotesize \faPhone\ (945)-276-8717 ~ 
+    \faEnvelope\ \href{mailto:alikparahmoubarak@gmail.com}alikparahmoubarak@gmail.com ~ 
+    \faLinkedin\ \href{https://www.linkedin.com/in/moubarak-ali-kparah}{linkedin.com/in/moubarak-ali-kparah} ~ 
+    \faGithub\ \href{https://github.com/Moubarak-01}{github.com/Moubarak-01}
+    \vspace{-8pt}
+\end{center}
+
+%---EDUCATION---
+\section{Education}
+  \resumeSubHeadingListStart
+    \resumeSubheading{Rust College}{Holly Springs, MS}{Bachelor of Science in Computer Science}{Expected Dec 2028}{}{GPA: 4.0\\ Coursework: Pre-Calculus, Intro to Python, Calculus I}
+  \resumeSubHeadingListEnd
+  \vspace{-12pt}
+
+%---EXPERIENCE---
+\section{Experience}
+    \resumeSubHeadingListStart
+        \resumeSubheading{Rhodes College}{Memphis, TN}{Biology Research Intern}{May 2025 – July 2025}{}{\\ \resumeItem{Managed complex scientific protocols, adhering to documentation standards that mirror software version control and debugging methodologies.}{}{}{}\resumeItem{Automated data entry workflows, reducing manual error rates by 15\% through systematic process optimization.}}
+    \resumeSubHeadingListEnd
+    \vspace{-12pt}
+
+%---PROJECTS---
+\section{Technical Projects} 
+    \resumeSubHeadingListStart
+        \resumeProjectHeading{\textbf{Moubely (Intelligent Desktop Assistant)}}{Electron, React, TypeScript, AI APIs}{Dec 2025}{}{}{}\resumeItem{Engineered a stealth Electron assistant with advanced window management, implementing a custom "Ghost Window" fix to remain invisible to screen recording software.}{}{}{}\resumeItem{Architected an 18-model "Waterfall" routing system with an automated history sanitization slicer to prevent API rejections, ensuring zero downtime across models like Gemini 3.0 and Claude 3.7.}{}{}{}\resumeItem{Developed a ticketed hybrid STT engine to resolve audio race conditions, reducing transcription latency by 40\% through RAM-based smart profile caching and live terminal telemetry.}{}{}{}\resumeProjectHeading{\textbf{Movie Search App}}{React, JavaScript, Tailwind CSS, AppWrite}{Nov 2025}{}{}{}\resumeItem{Built a reactive app using Appwrite for auth and real-time database management, scaling to 500+ active user searches via optimized REST API integration.}{}{}{}\resumeItem{Engineered a smart routing system for native Android intents or web fallback, improving mobile load times by 30\% and optimizing the overall user experience.}{}{}{}\resumeProjectHeading{\textbf{Personal Portfolio Website}}{HTML, CSS, JavaScript}{Sep 2025}{}{}{}\resumeItem{Developed a high-performance portfolio site using modern CSS Grid and Flexbox, achieving a 100/100 Lighthouse performance score.}{}{}{}\resumeItem{Automated deployment pipelines via GitHub Actions with custom domain configuration and SEO optimization.}{}{}{}
+    \resumeSubHeadingListEnd
+    \vspace{-12pt}
+
+%---Technical Skills---
+\section{Technical Skills}
+ \begin{itemize}[leftmargin=0.15in, label={}]
+    \small{\item{   
+     \textbf{Languages}{: TypeScript, JavaScript, Python, HTML/CSS} \\
+     \textbf{Frontend}{: React, Tailwind CSS, Vite, React Query, Radix UI} \\
+     \textbf{Backend & System}{: Electron (IPC, Native Modules), Node.js, REST APIs} \\
+     \textbf{AI & ML}{: Gemini API (1.5 & 2.0 Flash), DeepSeek R1, Perplexity, Groq, Whisper} \\
+     \textbf{Tools}{: Git/GitHub, Linux (Bash), VS Code, CyberChef, SSH}
+    }}
+ \end{itemize}
+
+%---AFFILIATIONS---
+\section{Affiliations & Honors}
+ \begin{itemize}[leftmargin=0.15in, label={}]
+    \small{\item{
+      ColorStack Fellow $\cdot$ 2026 EICOP Finalist $\cdot$ CodePath CyberSecurity $\cdot$ French Proficiency – Native
+    }}
+ \end{itemize}
+\vspace{-12pt}
+\end{document}
