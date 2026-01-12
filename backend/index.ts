@@ -1,7 +1,7 @@
 // Polyfill for pdfjs-dist (used by pdf-parse) in Node environment
 class MockDOMMatrix {
     a = 1; b = 0; c = 0; d = 1; e = 0; f = 0;
-    constructor() {}
+    constructor() { }
 }
 // @ts-ignore
 global.DOMMatrix = MockDOMMatrix;
@@ -14,7 +14,7 @@ import multer from 'multer';
 import path from 'path';
 import fs from 'fs';
 // Use require for pdf-parse-fork to avoid TS call signature issues and DOM errors
-const pdf = require('pdf-parse-fork'); 
+const pdf = require('pdf-parse-fork');
 import mammoth from 'mammoth';
 import axios from 'axios';
 import { Application, ApplicationStatus } from './models/Application.schema';
@@ -27,6 +27,7 @@ import { autoApply } from './services/autoApplier';
 import { signup, login, getMe, deleteAccount } from './services/auth';
 import { tailorResume } from './services/resumeTailor';
 import { parseResumeToJSON } from './services/resumeParser';
+import { transcribeBuffer } from './services/audioTranscriber';
 
 dotenv.config();
 
@@ -44,24 +45,24 @@ app.use('/generated_pdfs', express.static(path.join(__dirname, 'generated_pdfs')
 // Connect to MongoDB
 const mongoUri = process.env.MONGO_URI;
 if (!mongoUri) {
-  console.error('MONGO_URI is not defined in .env file');
-  process.exit(1);
+    console.error('MONGO_URI is not defined in .env file');
+    process.exit(1);
 }
 
 // Configure Multer for file uploads
 const storage = multer.diskStorage({
-  destination: (req, file, cb) => {
-    const uploadPath = path.join(__dirname, 'uploads');
-    // Ensure directory exists
-    if (!fs.existsSync(uploadPath)) {
-        fs.mkdirSync(uploadPath, { recursive: true });
+    destination: (req, file, cb) => {
+        const uploadPath = path.join(__dirname, 'uploads');
+        // Ensure directory exists
+        if (!fs.existsSync(uploadPath)) {
+            fs.mkdirSync(uploadPath, { recursive: true });
+        }
+        cb(null, uploadPath);
+    },
+    filename: (req, file, cb) => {
+        // Save as: timestamp-originalName
+        cb(null, `${Date.now()}-${file.originalname}`);
     }
-    cb(null, uploadPath);
-  },
-  filename: (req, file, cb) => {
-    // Save as: timestamp-originalName
-    cb(null, `${Date.now()}-${file.originalname}`);
-  }
 });
 
 const upload = multer({
@@ -73,7 +74,7 @@ const upload = multer({
 const clearUploadsOnStart = async () => {
     const uploadDir = path.join(__dirname, 'uploads');
     const pdfDir = path.join(__dirname, 'generated_pdfs');
-    
+
     [uploadDir, pdfDir].forEach(dir => {
         if (fs.existsSync(dir)) {
             fs.readdirSync(dir).forEach(file => {
@@ -100,12 +101,12 @@ const clearUploadsOnStart = async () => {
 };
 
 mongoose.connect(mongoUri)
-  .then(async () => {
-      console.log('Connected to MongoDB Atlas');
-      // Run cleanup after DB connection
-      clearUploadsOnStart();
-  })
-  .catch((err) => console.error('MongoDB connection error:', err));
+    .then(async () => {
+        console.log('Connected to MongoDB Atlas');
+        // Run cleanup after DB connection
+        clearUploadsOnStart();
+    })
+    .catch((err) => console.error('MongoDB connection error:', err));
 
 
 // --- API Routes ---
@@ -129,7 +130,7 @@ app.post('/api/applications/:id/tailor', async (req: Request, res: Response): Pr
 
         // Run AI Tailoring
         const result = await tailorResume(application.userId.toString(), application.jobId.toString());
-        
+
         // Save results
         application.tailoredPdfUrl = result.pdfUrl;
         application.coverLetter = result.coverLetter;
@@ -149,14 +150,14 @@ app.post('/api/ai/assistant', async (req: Request, res: Response): Promise<any> 
         const { userId, message, model, context } = req.body;
         const selectedModel = model || 'mistralai/mistral-small-3.1-24b-instruct:free';
         console.log(`🤖 AI Request | Model: ${selectedModel} | User: ${userId}`);
-        
+
         const user = await User.findById(userId);
         if (!user) {
             console.error("❌ User not found in DB");
             return res.status(404).json({ error: 'User not found' });
         }
-        const resumeContext = user.masterResumeText 
-            ? `USER RESUME CONTENT:\n${user.masterResumeText}` 
+        const resumeContext = user.masterResumeText
+            ? `USER RESUME CONTENT:\n${user.masterResumeText}`
             : "USER RESUME CONTENT: (None uploaded yet)";
 
         const appStateContext = context ? `
@@ -253,7 +254,7 @@ app.post('/api/ai/assistant', async (req: Request, res: Response): Promise<any> 
                                 if (content) {
                                     res.write(`data: ${JSON.stringify({ content })}\n\n`);
                                 }
-                            } catch (e) {}
+                            } catch (e) { }
                         }
                     }
                 });
@@ -263,7 +264,7 @@ app.post('/api/ai/assistant', async (req: Request, res: Response): Promise<any> 
                     response.data.on('end', resolve);
                     response.data.on('error', reject);
                 });
-                
+
                 if (streamSuccess) break;
 
             } catch (err: any) {
@@ -291,14 +292,54 @@ app.post('/api/ai/assistant', async (req: Request, res: Response): Promise<any> 
     }
 });
 
+// Audio Transcription Route (Groq Whisper)
+app.post('/api/ai/transcribe', upload.single('audio'), async (req: Request, res: Response): Promise<any> => {
+    try {
+        const file = req.file as Express.Multer.File;
+
+        if (!file) {
+            return res.status(400).json({ error: 'No audio file uploaded' });
+        }
+
+        console.log(`🎤 Received audio for transcription: ${file.originalname} (${file.size} bytes)`);
+
+        // Read the uploaded file into a buffer
+        const audioBuffer = fs.readFileSync(file.path);
+
+        // Transcribe using Groq
+        const result = await transcribeBuffer(audioBuffer, file.mimetype);
+
+        // Clean up the uploaded file
+        fs.unlinkSync(file.path);
+
+        res.json({
+            text: result.text,
+            duration: result.duration
+        });
+
+    } catch (error: any) {
+        console.error('❌ Transcription Route Error:', error);
+
+        // Clean up file on error
+        if (req.file?.path && fs.existsSync(req.file.path)) {
+            fs.unlinkSync(req.file.path);
+        }
+
+        res.status(500).json({
+            error: 'Transcription failed',
+            details: error.message
+        });
+    }
+});
+
 // Delete Resume/File Route
 app.delete('/api/user/files/:filename', async (req: Request, res: Response): Promise<any> => {
     try {
         const { filename } = req.params;
         const filenameStr = String(filename); // Ensure string
-        
+
         const user = await User.findOne({ "resumes.filename": filenameStr });
-        
+
         if (!user) {
             return res.status(404).json({ error: 'File not found' });
         }
@@ -326,7 +367,7 @@ app.post('/api/applications/:id/apply', async (req: Request, res: Response): Pro
         const applicationId = req.params.id as string;
         // Run in background (don't await) so UI doesn't freeze
         autoApply(applicationId).catch(err => console.error("Background apply error:", err));
-        
+
         res.json({ message: 'Auto-apply process started' });
     } catch (error: any) {
         console.error('Error starting auto-apply:', error);
@@ -350,7 +391,7 @@ let isIngesting = false;
 app.post('/api/jobs/ingest', async (req: Request, res: Response): Promise<any> => {
     try {
         const { clearFirst, userId, query } = req.body;
-        
+
         if (isIngesting) {
             return res.status(429).json({ error: 'Ingestion already in progress. Please wait.' });
         }
@@ -381,11 +422,11 @@ app.post('/api/jobs/ingest', async (req: Request, res: Response): Promise<any> =
 // Upload Resume/File Route
 app.post('/api/user/upload', upload.array('files', 6), async (req: Request, res: Response): Promise<any> => {
     try {
-        const userId = req.body.userId; 
+        const userId = req.body.userId;
         if (!userId) {
-             return res.status(400).json({ error: 'userId is required' });
+            return res.status(400).json({ error: 'userId is required' });
         }
-        
+
         const files = req.files as Express.Multer.File[];
         if (!files || files.length === 0) {
             return res.status(400).json({ error: 'No files uploaded' });
@@ -393,7 +434,7 @@ app.post('/api/user/upload', upload.array('files', 6), async (req: Request, res:
 
         const user = await User.findById(userId);
         if (!user) {
-             return res.status(404).json({ error: 'User not found' });
+            return res.status(404).json({ error: 'User not found' });
         }
 
         // Add new files to user record
@@ -406,7 +447,7 @@ app.post('/api/user/upload', upload.array('files', 6), async (req: Request, res:
         }));
 
         if ((user.resumes?.length || 0) + newFiles.length > 6) {
-             return res.status(400).json({ error: 'Cannot have more than 6 files. Please delete some first.' });
+            return res.status(400).json({ error: 'Cannot have more than 6 files. Please delete some first.' });
         }
 
         if (!user.resumes) user.resumes = [];
@@ -440,7 +481,7 @@ app.post('/api/user/upload', upload.array('files', 6), async (req: Request, res:
         if (extractedText) {
             user.masterResumeText = extractedText;
             console.log("Updated masterResumeText.");
-            
+
             // --- AI STRUCTURED PARSING ---
             try {
                 const structuredData = await parseResumeToJSON(extractedText);
@@ -451,13 +492,13 @@ app.post('/api/user/upload', upload.array('files', 6), async (req: Request, res:
                 console.error("Failed to structure data:", err);
             }
         }
-        
+
         const savedUser = await user.save();
         console.log(`👤 User data saved. Structured data present: ${!!savedUser.structuredExperience}`);
 
-        res.json({ 
-            message: 'Upload complete', 
-            files: newFiles, 
+        res.json({
+            message: 'Upload complete',
+            files: newFiles,
             totalFiles: user.resumes,
             parseStatus: parseStatus
         });
@@ -471,9 +512,9 @@ app.post('/api/user/upload', upload.array('files', 6), async (req: Request, res:
 app.post('/api/jobs/:id/match', async (req: Request, res: Response): Promise<any> => {
     try {
         const jobId = req.params.id as string;
-        
+
         let { userId } = req.body;
-        
+
         // If no userId provided, find the default user from the database
         if (!userId) {
             const user = await User.findOne();
@@ -496,13 +537,13 @@ app.get('/api/applications', async (req: Request, res: Response): Promise<any> =
     try {
         const userId = req.query.userId;
         if (!userId) {
-             return res.status(400).json({ error: 'userId query parameter is required' });
+            return res.status(400).json({ error: 'userId query parameter is required' });
         }
 
         const applications = await Application.find({ userId })
             .populate('jobId') // Get the job details (company, title)
             .sort({ updatedAt: -1 });
-            
+
         res.json(applications);
     } catch (error) {
         console.error('Error fetching applications:', error);
@@ -524,37 +565,37 @@ app.get('/api/user', async (req: Request, res: Response): Promise<any> => {
 });
 
 app.get('/api/jobs', async (req: Request, res: Response) => {
-  try {
-    const jobs = await Job.find().sort({ createdAt: -1 });
-    res.json(jobs);
-  } catch (error) {
-    console.error('Error fetching jobs:', error);
-    res.status(500).json({ error: 'Internal Server Error' });
-  }
+    try {
+        const jobs = await Job.find().sort({ createdAt: -1 });
+        res.json(jobs);
+    } catch (error) {
+        console.error('Error fetching jobs:', error);
+        res.status(500).json({ error: 'Internal Server Error' });
+    }
 });
 
 app.post('/api/applications', async (req: Request, res: Response): Promise<any> => {
-  try {
-    const { userId, jobId } = req.body;
+    try {
+        const { userId, jobId } = req.body;
 
-    if (!userId || !jobId) {
-      return res.status(400).json({ error: 'userId and jobId are required' });
+        if (!userId || !jobId) {
+            return res.status(400).json({ error: 'userId and jobId are required' });
+        }
+
+        // Use findOneAndUpdate with upsert to prevent duplicates
+        const application = await Application.findOneAndUpdate(
+            { userId, jobId },
+            { $setOnInsert: { status: ApplicationStatus.QUEUED } },
+            { upsert: true, new: true }
+        );
+
+        return res.status(201).json(application);
+    } catch (error) {
+        console.error('Error creating application:', error);
+        return res.status(500).json({ error: 'Internal Server Error' });
     }
-
-    // Use findOneAndUpdate with upsert to prevent duplicates
-    const application = await Application.findOneAndUpdate(
-      { userId, jobId },
-      { $setOnInsert: { status: ApplicationStatus.QUEUED } },
-      { upsert: true, new: true }
-    );
-
-    return res.status(201).json(application);
-  } catch (error) {
-    console.error('Error creating application:', error);
-    return res.status(500).json({ error: 'Internal Server Error' });
-  }
 });
 
 app.listen(PORT, () => {
-  console.log(`Server is running on port ${PORT}`);
+    console.log(`Server is running on port ${PORT}`);
 });
