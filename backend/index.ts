@@ -113,10 +113,13 @@ app.post('/api/ai/assistant', async (req: Request, res: Response): Promise<any> 
     try {
         const { userId, message, model } = req.body;
         const selectedModel = model || 'mistralai/mistral-small-3.1-24b-instruct:free';
+        console.log(`🤖 AI Request | Model: ${selectedModel} | User: ${userId}`);
         
         const user = await User.findById(userId);
-        if (!user) return res.status(404).json({ error: 'User not found' });
-
+        if (!user) {
+            console.error("❌ User not found in DB");
+            return res.status(404).json({ error: 'User not found' });
+        }
         const resumeContext = user.masterResumeText 
             ? `USER RESUME CONTENT:\n${user.masterResumeText}` 
             : "USER RESUME CONTENT: (None uploaded yet)";
@@ -197,10 +200,13 @@ app.post('/api/ai/assistant', async (req: Request, res: Response): Promise<any> 
         response.data.on('end', () => res.end());
         response.data.on('error', () => res.end());
 
-    } catch (error) {
-        console.error('AI Assistant Error:', error);
-        if (!res.headersSent) res.status(500).json({ error: 'Failed' });
-        else res.end();
+    } catch (error: any) {
+        console.error('❌ AI Assistant Error:', error.response?.data || error.message);
+        if (!res.headersSent) {
+            res.status(500).json({ error: 'AI matching failed', details: error.message });
+        } else {
+            res.end();
+        }
     }
 });
 

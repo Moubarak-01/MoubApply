@@ -26,8 +26,8 @@ const MessageContent: React.FC<MessageContentProps> = ({ content, isUser }) => {
         rehypePlugins={[rehypeKatex]}
         components={{
           // Custom styling for markdown elements
-          p: ({ node, ...props }) => <p className="mb-2 last:mb-0" {...props} />,
-          ul: ({ node, ...props }) => <ul className="list-disc pl-4 mb-2 space-y-1" {...props} />,
+          p: ({ node, ...props }) => <div className="mb-4 last:mb-0" {...props} />,
+          ul: ({ node, ...props }) => <ul className="list-disc pl-4 mb-4 space-y-1" {...props} />,
           ol: ({ node, ...props }) => <ol className="list-decimal pl-4 mb-2 space-y-1" {...props} />,
           li: ({ node, ...props }) => <li className="" {...props} />,
           h1: ({ node, ...props }) => <h1 className="text-lg font-bold mb-2 mt-3" {...props} />,
