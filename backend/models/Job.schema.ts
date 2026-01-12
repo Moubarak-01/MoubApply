@@ -4,6 +4,7 @@ export interface IJob extends Document {
   title: string;
   company: string;
   rawDescription: string;
+  applyLink?: string;
   matchScore: number;
   tags: string[];
   gradYearReq: number;
@@ -20,7 +21,8 @@ const JobSchema: Schema = new Schema({
   title: { type: String, required: true },
   company: { type: String, required: true },
   rawDescription: { type: String, required: true },
-  matchScore: { type: Number, required: true },
+  applyLink: { type: String },
+  matchScore: { type: Number, default: 0 },
   tags: [{ type: String }],
   gradYearReq: { type: Number, required: true },
   aiSummary: {

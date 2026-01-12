@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Clock, Loader2, CheckCircle2, AlertCircle } from 'lucide-react';
+import { Clock, Loader2, CheckCircle2, AlertCircle, Zap } from 'lucide-react';
 import { clsx } from 'clsx';
 
 interface Application {
@@ -23,30 +23,47 @@ interface TrackerProps {
 
 export const Tracker: React.FC<TrackerProps> = ({ userId }) => {
   const [applications, setApplications] = useState<Application[]>([]);
+  const [applyingId, setApplyingId] = useState<string | null>(null);
   const columns: (keyof typeof statusConfig)[] = ['Queued', 'Processing', 'Applied', 'Action Needed'];
 
-  useEffect(() => {
-    const fetchApplications = async () => {
-      try {
-        const response = await fetch(`http://localhost:5000/api/applications?userId=${userId}`);
-        const data = await response.json();
-        const formattedApps = data.map((app: any) => ({
-          _id: app._id,
-          company: app.jobId.company,
-          role: app.jobId.title,
-          status: app.status,
-          date: new Date(app.createdAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
-        }));
-        setApplications(formattedApps);
-      } catch (error) {
-        console.error('Error fetching applications:', error);
-      }
-    };
+  const fetchApplications = async () => {
+    try {
+      const response = await fetch(`http://localhost:5000/api/applications?userId=${userId}`);
+      const data = await response.json();
+      const formattedApps = data.map((app: any) => ({
+        _id: app._id,
+        company: app.jobId.company,
+        role: app.jobId.title,
+        status: app.status,
+        date: new Date(app.createdAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
+      }));
+      setApplications(formattedApps);
+    } catch (error) {
+      console.error('Error fetching applications:', error);
+    }
+  };
 
+  useEffect(() => {
     if (userId) {
       fetchApplications();
     }
   }, [userId]);
+
+  const handleAutoApply = async (appId: string) => {
+      setApplyingId(appId);
+      try {
+          await fetch(`http://localhost:5000/api/applications/${appId}/apply`, {
+              method: 'POST'
+          });
+          // Optimistic update or refresh
+          await fetchApplications();
+      } catch (error) {
+          console.error("Auto apply failed", error);
+          alert("Failed to start auto-apply");
+      } finally {
+          setApplyingId(null);
+      }
+  };
 
   return (
     <div className="flex h-full gap-4 overflow-x-auto p-4 bg-slate-50/50">
@@ -69,8 +86,20 @@ export const Tracker: React.FC<TrackerProps> = ({ userId }) => {
                 <div key={app._id} className="bg-white p-4 rounded-xl shadow-sm border border-slate-100 hover:shadow-md transition-shadow">
                   <h4 className="font-bold text-slate-800">{app.company}</h4>
                   <p className="text-sm text-slate-500 mb-2">{app.role}</p>
-                  <div className="flex items-center justify-between text-xs text-slate-400">
+                  <div className="flex items-center justify-between text-xs text-slate-400 mt-3">
                     <span>{app.date}</span>
+                    
+                    {status === 'Queued' && (
+                        <button 
+                            onClick={() => handleAutoApply(app._id)}
+                            disabled={applyingId === app._id}
+                            className="flex items-center gap-1 bg-indigo-600 text-white px-3 py-1.5 rounded-lg text-xs font-bold hover:bg-indigo-700 disabled:opacity-50 transition-colors shadow-sm shadow-indigo-200"
+                        >
+                            {applyingId === app._id ? <Loader2 className="w-3 h-3 animate-spin"/> : <Zap className="w-3 h-3 fill-current" />}
+                            Auto-Apply
+                        </button>
+                    )}
+
                     {status === 'Applied' && (
                         <span className="text-emerald-600 font-medium">View Confirmation</span>
                     )}

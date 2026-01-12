@@ -3,7 +3,15 @@ import mongoose, { Schema, Document } from 'mongoose';
 export interface IUser extends Document {
   name: string;
   email: string;
+  password?: string; // Hashed password
   masterResumeText: string;
+  resumes: {
+    originalName: string;
+    filename: string;
+    path: string;
+    mimetype: string;
+    uploadedAt: Date;
+  }[];
   gradYear: number;
   preferences: {
     location: 'Remote' | 'Hybrid' | 'Onsite';
@@ -16,8 +24,16 @@ export interface IUser extends Document {
 const UserSchema: Schema = new Schema({
   name: { type: String, required: true },
   email: { type: String, required: true, unique: true },
-  masterResumeText: { type: String, required: true },
-  gradYear: { type: Number, required: true },
+  password: { type: String, required: true },
+  masterResumeText: { type: String, default: '' },
+  resumes: [{
+    originalName: String,
+    filename: String,
+    path: String,
+    mimetype: String,
+    uploadedAt: { type: Date, default: Date.now }
+  }],
+  gradYear: { type: Number, default: 2026 },
   preferences: {
     location: { 
       type: String, 

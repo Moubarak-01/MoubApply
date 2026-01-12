@@ -58,6 +58,19 @@ const MOCK_JOBS = [
         topSkills: ['Ruby', 'API Design', 'System Architecture']
     }
   },
+  {
+    title: 'AI Research Intern - TEST',
+    company: 'OpenAI',
+    matchScore: 0,
+    tags: ['Python', 'PyTorch', 'Research'],
+    gradYearReq: 2026,
+    rawDescription: 'We are seeking a highly motivated Research Intern to join our team. You will work on training large language models and advancing the state of the art in AI. Qualifications: Strong proficiency in Python and PyTorch. Experience with distributed training. Publications in top-tier conferences (NeurIPS, ICML) are a plus. You will collaborate with world-class researchers to solve hard problems.',
+    aiSummary: {
+        whyYouWillLoveIt: '',
+        theCatch: '',
+        topSkills: []
+    }
+  },
 ];
 
 const DEFAULT_USER = {
