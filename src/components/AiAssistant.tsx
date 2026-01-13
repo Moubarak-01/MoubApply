@@ -11,6 +11,8 @@ export interface AiAssistantRef {
 
 interface AiAssistantProps {
   userId: string | null;
+  jobs?: any[];
+  applications?: any[];
 }
 
 interface Message {
@@ -46,7 +48,7 @@ const MODELS = [
   { id: 'qwen/qwen-2.5-72b-instruct:free', name: 'Qwen 2.5 72B (Free)' }
 ];
 
-export const AiAssistant = forwardRef<AiAssistantRef, AiAssistantProps>(({ userId }, ref) => {
+export const AiAssistant = forwardRef<AiAssistantRef, AiAssistantProps>(({ userId, jobs = [], applications = [] }, ref) => {
   const [isOpen, setIsOpen] = useState(false);
   const [isVisible, setIsVisible] = useState(true);
   const [copiedId, setCopiedId] = useState<number | null>(null);
@@ -174,7 +176,15 @@ export const AiAssistant = forwardRef<AiAssistantRef, AiAssistantProps>(({ userI
       const response = await fetch('http://localhost:5000/api/ai/assistant', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ userId, message: userText, model: randomModel })
+        body: JSON.stringify({
+          userId,
+          message: userText,
+          model: randomModel,
+          context: {
+            jobs: jobs.slice(0, 10), // Limit context size
+            applications: applications.slice(0, 10)
+          }
+        })
       });
 
       if (!response.ok || !response.body) throw new Error("Stream failed");
