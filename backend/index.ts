@@ -361,6 +361,33 @@ app.delete('/api/user/files/:filename', async (req: Request, res: Response): Pro
     }
 });
 
+// Cancel Application Route (Cleans up generated files)
+app.delete('/api/applications/:id/cancel', async (req: Request, res: Response): Promise<any> => {
+    try {
+        const applicationId = req.params.id;
+        const application = await Application.findById(applicationId);
+        if (!application) return res.status(404).json({ error: 'Application not found' });
+
+        // Delete generated PDF if exists
+        if (application.tailoredPdfUrl) {
+            const relativePath = application.tailoredPdfUrl.replace(/^\//, '');
+            const fullPath = path.join(process.cwd(), relativePath);
+            if (fs.existsSync(fullPath)) {
+                fs.unlinkSync(fullPath);
+                console.log(`🧹 Cancel cleanup: Deleted ${fullPath}`);
+            }
+        }
+
+        // Delete the application record or reset it
+        await Application.findByIdAndDelete(applicationId);
+
+        res.json({ message: 'Application canceled and files cleaned up.' });
+    } catch (error) {
+        console.error('Cancel error:', error);
+        res.status(500).json({ error: 'Failed to cancel application' });
+    }
+});
+
 // Auto-Apply Route
 app.post('/api/applications/:id/apply', async (req: Request, res: Response): Promise<any> => {
     try {
@@ -547,6 +574,16 @@ app.get('/api/applications', async (req: Request, res: Response): Promise<any> =
         res.json(applications);
     } catch (error) {
         console.error('Error fetching applications:', error);
+    }
+});
+
+app.get('/api/applications/:id', async (req: Request, res: Response): Promise<any> => {
+    try {
+        const application = await Application.findById(req.params.id).populate('jobId');
+        if (!application) return res.status(404).json({ error: 'Application not found' });
+        res.json(application);
+    } catch (error) {
+        console.error('Error fetching application:', error);
         res.status(500).json({ error: 'Internal Server Error' });
     }
 });

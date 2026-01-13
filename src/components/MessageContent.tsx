@@ -2,7 +2,9 @@ import React from 'react';
 import ReactMarkdown from 'react-markdown';
 import remarkMath from 'remark-math';
 import rehypeKatex from 'rehype-katex';
-import 'katex/dist/katex.min.css'; // Import KaTeX styles
+import rehypeHighlight from 'rehype-highlight';
+import 'katex/dist/katex.min.css';
+import 'highlight.js/styles/github-dark.css';
 
 interface MessageContentProps {
   content: string;
@@ -20,10 +22,10 @@ const MessageContent: React.FC<MessageContentProps> = ({ content, isUser }) => {
     .replace(/\\\(([\s\S]*?)\\\)/g, (_, equation) => `$${equation.trim()}$`);
 
   return (
-    <div className={`prose ${isUser ? 'prose-invert' : 'prose-indigo'} max-w-none break-words text-sm leading-relaxed`}>
+    <div className={`prose ${isUser ? 'prose-invert' : 'prose-indigo dark:prose-invert'} max-w-none break-words text-sm leading-relaxed`}>
       <ReactMarkdown
         remarkPlugins={[remarkMath]}
-        rehypePlugins={[rehypeKatex]}
+        rehypePlugins={[rehypeKatex, rehypeHighlight]}
         components={{
           // Custom styling for markdown elements
           p: ({ node, ...props }) => <div className="mb-4 last:mb-0" {...props} />,
@@ -34,8 +36,17 @@ const MessageContent: React.FC<MessageContentProps> = ({ content, isUser }) => {
           h2: ({ node, ...props }) => <h2 className="text-base font-bold mb-2 mt-3" {...props} />,
           h3: ({ node, ...props }) => <h3 className="text-sm font-bold mb-1 mt-2" {...props} />,
           code: ({ node, inline, className, children, ...props }: any) => {
-            /language-(\w+)/.exec(className || '');
-            return !inline ? (
+            const match = /language-(\w+)/.exec(className || '');
+            return !inline && match ? (
+              <div className="bg-[#0d1117] text-slate-50 rounded-lg my-2 overflow-x-auto border border-slate-700">
+                {/* Header with language label could go here */}
+                <div className="p-3">
+                  <code className={className} {...props}>
+                    {children}
+                  </code>
+                </div>
+              </div>
+            ) : !inline ? (
               <div className="bg-slate-900 text-slate-50 p-3 rounded-lg my-2 overflow-x-auto border border-slate-700">
                 <code className={className} {...props}>
                   {children}
@@ -51,12 +62,15 @@ const MessageContent: React.FC<MessageContentProps> = ({ content, isUser }) => {
             <blockquote className="border-l-4 border-indigo-300 pl-3 italic my-2 text-slate-500" {...props} />
           ),
           a: ({ node, ...props }) => (
-            <a 
-              className={`underline underline-offset-2 ${isUser ? 'text-white' : 'text-indigo-600 hover:text-indigo-800'}`} 
-              target="_blank" 
-              rel="noopener noreferrer" 
-              {...props} 
+            <a
+              className={`underline underline-offset-2 ${isUser ? 'text-white' : 'text-indigo-600 hover:text-indigo-800'}`}
+              target="_blank"
+              rel="noopener noreferrer"
+              {...props}
             />
+          ),
+          strong: ({ node, ...props }) => (
+            <strong className={`font-bold ${isUser ? 'text-white' : 'text-indigo-600'}`} {...props} />
           ),
         }}
       >

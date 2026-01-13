@@ -5,8 +5,8 @@ import { enrichJobWithAI } from './aiMatcher';
 
 // Renamed from COMPANY_TOKENS to reflect these are specific boards we scrape
 const GREENHOUSE_BOARDS = [
-  'notion', 'figma', 'stripe', 'airbnb', 'uber', 'pinterest',
-  'coinbase', 'mongodb', 'datadog', 'robinhood', 'snapchat', 'doordash', 'lyft'
+  'figma', 'stripe', 'airbnb', 'pinterest',
+  'coinbase', 'mongodb', 'datadog', 'robinhood', 'lyft'
 ];
 
 // Renamed from ROLE_KEYWORDS to reflect their purpose as filters for the raw board data
@@ -16,6 +16,37 @@ const TECH_FILTERS = [
 ];
 
 const sleep = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
+
+/**
+ * Fetches jobs from Adzuna API.
+ */
+const fetchAdzunaJobs = async (query: string) => {
+  try {
+    const appId = process.env.ADZUNA_APP_ID;
+    const appKey = process.env.ADZUNA_APP_KEY;
+    if (!appId || !appKey) {
+      console.warn("⚠️ Adzuna credentials missing in .env");
+      return [];
+    }
+
+    console.log(`🌍 [Adzuna] Searching for: "${query}"...`);
+    // 'content-type' is not needed in params for GET.
+    const response = await axios.get(`https://api.adzuna.com/v1/api/jobs/us/search/1`, {
+      params: {
+        app_id: appId,
+        app_key: appKey,
+        results_per_page: 20,
+        what: query,
+        where: 'remote'
+      },
+      headers: { 'Content-Type': 'application/json' }
+    });
+    return response.data.results || [];
+  } catch (error: any) {
+    console.error(`❌ Adzuna API Error:`, error.message);
+    return [];
+  }
+};
 
 /**
  * Fetches jobs from JSearch RapidAPI.
@@ -55,6 +86,8 @@ const ingestGreenhouseJobs = async (matchingUser: any, query?: string) => {
       const response = await axios.get(`https://boards-api.greenhouse.io/v1/boards/${token}/jobs?content=true`);
       const ghJobs = response.data.jobs || [];
 
+      let boardNewCount = 0;
+
       for (const ghJob of ghJobs) {
         const title = ghJob.title;
         const lowerTitle = title.toLowerCase();
@@ -87,17 +120,14 @@ const ingestGreenhouseJobs = async (matchingUser: any, query?: string) => {
 
           await newJob.save();
           count++;
+          boardNewCount++;
 
-          // Trigger AI Match
-          if (matchingUser && matchingUser.masterResumeText) {
-            console.log(`🤖 Auto-matching (Greenhouse): ${title}`);
-            await sleep(3000); // Rate limit
-            await enrichJobWithAI(newJob._id.toString(), matchingUser._id.toString()).catch(e => console.error(e.message));
-          }
         } catch (err: any) {
           if (err.code !== 11000) console.error(`❌ Failed to save GH job ${title}:`, err.message);
         }
       }
+      console.log(`   ✅ [${token.toUpperCase()}] Found ${ghJobs.length} raw jobs. Saved ${boardNewCount} relevant new jobs.`);
+
     } catch (error: any) {
       console.error(`❌ Failed to process GH board ${token}:`, error.message);
     }
@@ -156,11 +186,11 @@ export const ingestJobs = async (userId?: string, query?: string) => {
         await newJob.save();
         totalNewJobs++;
 
-        if (matchingUser && matchingUser.masterResumeText) {
-          console.log(`🤖 Auto-matching (JSearch): ${newJob.title}`);
-          await sleep(3000);
-          await enrichJobWithAI(newJob._id.toString(), matchingUser._id.toString()).catch(e => console.error(`❌ AI match failed:`, e.message));
-        }
+        // if (matchingUser && matchingUser.masterResumeText) {
+        //   console.log(`🤖 Auto-matching (JSearch): ${newJob.title}`);
+        //   await sleep(3000);
+        //   await enrichJobWithAI(newJob._id.toString(), matchingUser._id.toString()).catch(e => console.error(`❌ AI match failed:`, e.message));
+        // }
 
       } catch (err: any) {
         if (err.code !== 11000) console.error(`❌ Failed to save JSearch job:`, err.message);
@@ -169,6 +199,40 @@ export const ingestJobs = async (userId?: string, query?: string) => {
 
   } catch (error: any) {
     console.error("❌ JSearch Ingestion Failed:", error.message);
+  }
+
+  // 4. Run Adzuna Ingestion
+  try {
+    const searchQuery = query || "Software Engineer Intern";
+    const adzunaResults = await fetchAdzunaJobs(searchQuery);
+    console.log(`🌍 [Adzuna] Found ${adzunaResults.length} results.`);
+
+    for (const aJob of adzunaResults) {
+      const externalId = `adzuna-${aJob.id}`;
+      const existingJob = await Job.findOne({ externalId });
+      if (existingJob) continue;
+
+      try {
+        const newJob = new Job({
+          title: aJob.title,
+          company: aJob.company?.display_name || 'Unknown',
+          rawDescription: aJob.description || 'No description',
+          applyLink: aJob.redirect_url,
+          externalId: externalId,
+          matchScore: 0,
+          tags: [aJob.location?.display_name || 'Remote', 'Adzuna'],
+          gradYearReq: 2026,
+          aiSummary: { whyYouWillLoveIt: '', theCatch: '', topSkills: [] },
+        });
+        await newJob.save();
+        totalNewJobs++;
+      } catch (err: any) {
+        // ignore dups
+      }
+    }
+
+  } catch (error: any) {
+    console.error("❌ Adzuna Ingestion Failed:", error.message);
   }
 
   return {

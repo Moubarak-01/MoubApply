@@ -29,3 +29,11 @@ yarn-debug.log*
 yarn-error.log*
 logs/
 *.log
+
+# Generated Artifacts (created by testing)
+generated_pdfs/
+temp_latex/
+*TEST_RESUME*
+*test_resume*
+*_test.pdf
+test_full_compilation.ts

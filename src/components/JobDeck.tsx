@@ -22,24 +22,24 @@ export const JobDeck: React.FC<JobDeckProps> = ({ initialJobs, userGradYear, onJ
   }, [initialJobs]);
 
   const handleFetchRealJobs = async () => {
-      setIsIngesting(true);
-      try {
-          const res = await fetch('http://localhost:5000/api/jobs/ingest', {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ query: searchQuery, range: 'week' })
-          });
-          if (res.ok) {
-              const data = await res.json();
-              alert(`Fetched ${data.newJobs} real jobs!`);
-              // Reload page or trigger a parent refresh
-              window.location.reload(); 
-          }
-      } catch (err) {
-          alert("Failed to fetch real jobs. Check RAPIDAPI_KEY.");
-      } finally {
-          setIsIngesting(false);
+    setIsIngesting(true);
+    try {
+      const res = await fetch('http://localhost:5000/api/jobs/ingest', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ query: searchQuery, range: 'week' })
+      });
+      if (res.ok) {
+        const data = await res.json();
+        alert(`Fetched ${data.newJobs} real jobs!`);
+        // Reload page or trigger a parent refresh
+        window.location.reload();
       }
+    } catch (err) {
+      alert("Failed to fetch real jobs. Check RAPIDAPI_KEY.");
+    } finally {
+      setIsIngesting(false);
+    }
   };
 
   const handleSwipe = async (direction: 'right' | 'left', job: Job) => {
@@ -58,31 +58,31 @@ export const JobDeck: React.FC<JobDeckProps> = ({ initialJobs, userGradYear, onJ
 
   if (jobs.length === 0) {
     return (
-      <div className="flex flex-col items-center justify-center h-full text-slate-500 gap-6 p-10 bg-white rounded-3xl border border-dashed border-slate-200 shadow-inner">
+      <div className="flex flex-col items-center justify-center h-full text-slate-500 dark:text-slate-400 gap-6 p-10 bg-white dark:bg-slate-900 rounded-3xl border border-dashed border-slate-200 dark:border-slate-800 shadow-inner transition-colors">
         <div className="text-center">
-            <p className="text-xl font-bold text-slate-800">No more jobs to swipe!</p>
-            <p className="text-sm">Swipe more real jobs from the API below.</p>
+          <p className="text-xl font-bold text-slate-800 dark:text-white">No more jobs to swipe!</p>
+          <p className="text-sm">Swipe more real jobs from the API below.</p>
         </div>
-        
+
         <div className="w-full max-w-sm space-y-4">
-            <div className="relative">
-                <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
-                <input 
-                    type="text" 
-                    value={searchQuery}
-                    onChange={(e) => setSearchQuery(e.target.value)}
-                    className="w-full pl-10 pr-4 py-3 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:ring-2 focus:ring-indigo-500 focus:outline-none"
-                    placeholder="Search query (e.g. React Developer)"
-                />
-            </div>
-            <button 
-                onClick={handleFetchRealJobs}
-                disabled={isIngesting}
-                className="w-full py-4 bg-indigo-600 text-white rounded-2xl font-bold hover:bg-indigo-700 transition-all shadow-lg shadow-indigo-200 flex items-center justify-center gap-2 disabled:opacity-50"
-            >
-                {isIngesting ? <Loader2 className="w-5 h-5 animate-spin" /> : <RefreshCw className="w-5 h-5" />}
-                {isIngesting ? 'Fetching Real Jobs...' : 'Fetch Real Jobs (RapidAPI)'}
-            </button>
+          <div className="relative">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+            <input
+              type="text"
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              className="w-full pl-10 pr-4 py-3 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-sm focus:ring-2 focus:ring-indigo-500 focus:outline-none dark:text-white dark:placeholder-slate-500 transition-colors"
+              placeholder="Search query (e.g. React Developer)"
+            />
+          </div>
+          <button
+            onClick={handleFetchRealJobs}
+            disabled={isIngesting}
+            className="w-full py-4 bg-indigo-600 text-white rounded-2xl font-bold hover:bg-indigo-700 transition-all shadow-lg shadow-indigo-200 dark:shadow-none flex items-center justify-center gap-2 disabled:opacity-50"
+          >
+            {isIngesting ? <Loader2 className="w-5 h-5 animate-spin" /> : <RefreshCw className="w-5 h-5" />}
+            {isIngesting ? 'Fetching Real Jobs...' : 'Fetch Real Jobs (RapidAPI)'}
+          </button>
         </div>
       </div>
     );
@@ -92,20 +92,20 @@ export const JobDeck: React.FC<JobDeckProps> = ({ initialJobs, userGradYear, onJ
     <div className="relative w-full h-[600px] flex justify-center items-center overflow-hidden">
       <AnimatePresence>
         {jobs.map((job, index) => {
-             // Only render the top card and the one below it
-             if (index > 1) return null;
-             
-             return (
-              <JobCard
-                key={job._id}
-                job={job}
-                userGradYear={userGradYear}
-                onSwipe={handleSwipe}
-                onClick={onJobSelect}
-                className={index === 0 ? "z-10" : "z-0 scale-95 translate-y-4 opacity-50"}
-              />
-            );
-        }).reverse()} 
+          // Only render the top card and the one below it
+          if (index > 1) return null;
+
+          return (
+            <JobCard
+              key={job._id}
+              job={job}
+              userGradYear={userGradYear}
+              onSwipe={handleSwipe}
+              onClick={onJobSelect}
+              className={index === 0 ? "z-10" : "z-0 scale-95 translate-y-4 opacity-50"}
+            />
+          );
+        }).reverse()}
       </AnimatePresence>
     </div>
   );

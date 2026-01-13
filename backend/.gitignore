@@ -12,3 +12,26 @@ dist/
 # Logs
 *.log
 npm-debug.log*
+
+# Uploaded resumes (user files)
+uploads/
+uplooads/
+
+# Generated PDFs (tailored resumes)
+generated_pdfs/
+
+# Temporary LaTeX files
+temp_latex/
+*.aux
+*.out
+*.synctex.gz
+
+# Editor files
+.vscode/
+*.swp
+
+# User specific files
+Moubarak RESUME.pdf
+*TEST_RESUME*
+*test_resume*
+*_test.pdf

@@ -10,8 +10,8 @@ export interface IJob extends Document {
   tags: string[];
   gradYearReq: number;
   aiSummary: {
-    whyYouWillLoveIt: string;
-    theCatch: string;
+    whyYouWillLoveIt: string[];
+    theCatch: string[];
     topSkills: string[];
   };
   createdAt: Date;
@@ -28,8 +28,8 @@ const JobSchema: Schema = new Schema({
   tags: [{ type: String }],
   gradYearReq: { type: Number, required: true },
   aiSummary: {
-    whyYouWillLoveIt: { type: String },
-    theCatch: { type: String },
+    whyYouWillLoveIt: [{ type: String }],
+    theCatch: [{ type: String }],
     topSkills: [{ type: String }],
   }
 }, { timestamps: true });

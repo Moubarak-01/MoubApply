@@ -108,13 +108,27 @@ export const autoApply = async (applicationId: string) => {
         }
 
         // 5. Success (Mocked for now - we don't actually click submit to avoid spamming)
-        console.log('Form filled. Waiting 5 seconds before closing...');
-        await page.waitForTimeout(5000);
+        console.log('✅ Form filled. Pausing for 60 SECONDS for manual review/submission...');
+        console.log('👉 Please check the browser window and click Submit if everything looks good.');
+        await page.waitForTimeout(60000); // 1 minute pause for user review
 
         // Update Status to Applied
         application.status = ApplicationStatus.APPLIED;
         application.appliedAt = new Date();
         await application.save();
+
+        // 6. Cleanup Generated Files (User Request)
+        if (application.tailoredPdfUrl && fullPath && fs.existsSync(fullPath)) {
+            try {
+                fs.unlinkSync(fullPath);
+                console.log(`🧹 Cleanup: Deleted temporary resume file: ${fullPath}`);
+                // Optional: Clear the URL from the DB record if desired, but keeping record is usually fine.
+                // application.tailoredPdfUrl = ""; 
+                // await application.save();
+            } catch (e) {
+                console.error("Cleanup failed:", e);
+            }
+        }
 
     } catch (error) {
         console.error('Auto-Apply Failed:', error);

@@ -1,0 +1,167 @@
+\documentclass[letterpaper,11pt]{article}
+
+\usepackage{latexsym}
+\usepackage[empty]{fullpage}
+\usepackage{titlesec}
+\usepackage{marvosym}
+\usepackage[usenames,dvipsnames]{color}
+\usepackage{verbatim}
+\usepackage{enumitem}
+\usepackage[hidelinks]{hyperref}
+\usepackage{fancyhdr}
+\usepackage[english]{babel}
+\usepackage{tabularx}
+\usepackage{fontawesome5}
+\usepackage{multicol}
+\setlength{\multicolsep}{-3.0pt}
+\setlength{\columnsep}{-1pt}
+\input{glyphtounicode}
+\usepackage[margin=1.4cm]{geometry}
+
+\pagestyle{fancy}
+\fancyhf{} % clear all header and footer fields
+\fancyfoot{}
+\renewcommand{\headrulewidth}{0pt}
+\renewcommand{\footrulewidth}{0pt}
+
+% Adjust margins
+\addtolength{\oddsidemargin}{-0.15in}
+\addtolength{\textwidth}{0.3in}
+
+\urlstyle{same}
+
+\raggedbottom
+\raggedright
+\setlength{\tabcolsep}{0in}
+
+% Sections formatting
+\titleformat{\section}{
+  \vspace{-4pt}\scshape\raggedright\large\bfseries
+}{}{0em}{}[\color{black}\titlerule \vspace{-5pt}]
+
+% Ensure that generate pdf is machine readable/ATS parsable
+\pdfgentounicode=1
+
+%-------------------------
+% Custom commands
+\newcommand{\resumeItem}[1]{
+  \item\small{
+    {#1 \vspace{0pt}}
+  }
+}
+
+\newcommand{\resumeSubheading}[4]{
+  \vspace{-2pt}\item
+    \begin{tabular*}{1.0\textwidth}[t]{l@{\extracolsep{\fill}}r}
+      \textbf{#1} & \textbf{\small #2} \\
+      \textit{\small#3} & \textit{\small #4} \\
+    \end{tabular*}\vspace{-7pt}
+}
+
+\newcommand{\resumeProjectHeading}[2]{
+    \item
+    \begin{tabular*}{1.001\textwidth}{l@{\extracolsep{\fill}}r}
+      \small#1 & \textbf{\small #2}\\
+    \end{tabular*}\vspace{-7pt}
+}
+
+\renewcommand\labelitemi{$\vcenter{\hbox{\tiny$\bullet$}}$}
+\renewcommand\labelitemii{$\vcenter{\hbox{\tiny$\bullet$}}$}
+
+\newcommand{\resumeSubHeadingListStart}{\begin{itemize}[leftmargin=0.0in, label={}]}
+\newcommand{\resumeSubHeadingListEnd}{\end{itemize}}\vspace{0pt}
+\newcommand{\resumeItemListStart}{\begin{itemize}}
+\newcommand{\resumeItemListEnd}{\end{itemize}\vspace{-5pt}}
+
+\begin{document}
+
+%----------HEADING----------
+\begin{center}
+    {\Large \scshape {{FULL_NAME}} } \\[2mm]
+    \footnotesize \raisebox{-0.1\height}
+    \faPhone\ \underline{ {{PHONE}} } ~ 
+    {\faEnvelope\  \underline{ {{EMAIL}} }} ~ 
+    {\faLinkedin\ \underline{\href{https://linkedin.com/in/{{LINKEDIN_ID}}}{linkedin.com/in/{{LINKEDIN_ID}}}}} ~
+    {\faGithub\ \underline{\href{https://github.com/{{GITHUB_ID}}}{github.com/{{GITHUB_ID}}}}}
+    \vspace{-8pt}
+\end{center}
+
+%-----------EDUCATION-----------
+\section{Education}
+  \resumeSubHeadingListStart
+    \resumeSubheading
+      { {{UNIVERSITY}} }{Expected {{GRAD_DATE}} }
+      { {{DEGREE}} | \textbf{GPA: {{GPA}} }}{ {{LOCATION}} }
+      \resumeItemListStart
+        \resumeItem {Relevant Coursework: {{COURSEWORK}} }
+    \resumeItemListEnd
+  \resumeSubHeadingListEnd
+  \vspace{-12pt}
+
+%-----------EXPERIENCE-----------
+\section{Experience}
+    \resumeSubHeadingListStart
+        {{#EXPERIENCE}}
+            \resumeSubheading{ {{COMPANY}} }{ {{DATES}} }{ {{ROLE}} }{ {{LOCATION}} } 
+                \resumeItemListStart
+                    {{#BULLETS}}
+                    \resumeItem{ {{.}} }
+                    {{/BULLETS}}
+                \resumeItemListEnd
+        {{/EXPERIENCE}}
+    \resumeSubHeadingListEnd
+    \vspace{-12pt}
+
+%-----------PROJECTS-----------
+\section{Technical Projects} 
+    \resumeSubHeadingListStart
+    
+    {{#PROJECTS}}
+    \resumeProjectHeading
+        {\textbf{\href{ {{LINK}} }{ {{TITLE}} }} $|$ \emph{ {{TECH_STACK}} }}{ {{DATE}} }
+        \resumeItemListStart
+            {{#BULLETS}}
+            \resumeItem{ {{.}} }
+            {{/BULLETS}}
+        \resumeItemListEnd
+        \vspace{-10pt}
+    {{/PROJECTS}}
+          
+    \resumeSubHeadingListEnd
+    \vspace{-12pt}
+
+%-----------LEADERSHIP-----------
+\section{Leadership} 
+    \resumeSubHeadingListStart
+        {{#LEADERSHIP}}
+        \resumeProjectHeading
+            {\textbf{{ {{ORG_NAME}} }} $|$ \emph{ {{ROLE}} }}{ {{DATES}} }
+          \resumeItemListStart
+            {{#BULLETS}}
+            \resumeItem{ {{.}} }
+            {{/BULLETS}}
+          \resumeItemListEnd
+        {{/LEADERSHIP}}
+    \resumeSubHeadingListEnd
+
+%-----------Technical Skills-----------
+\section{Technical Skills}
+ \begin{itemize}[leftmargin=0.15in, label={}]
+    \small{\item{   
+     \textbf{Languages}{: {{SKILLS_LANGUAGES}} } \\
+     \textbf{Frontend}{: {{SKILLS_FRONTEND}} } \\
+     \textbf{Backend \& System}{: {{SKILLS_BACKEND}} } \\
+     \textbf{AI \& ML}{: {{SKILLS_AI}} } \\
+     \textbf{Tools}{: {{SKILLS_TOOLS}} }
+    }}
+ \end{itemize}
+
+%-----------AFFILIATIONS-----------
+\section{Affiliations \& Honors}
+ \begin{itemize}[leftmargin=0.15in, label={}]
+    \small{\item{
+      {{AFFILIATIONS}}
+    }}
+ \end{itemize}
+\vspace{-12pt}
+\end{document}
