@@ -16,6 +16,7 @@ export interface IUser extends Document {
   preferences: {
     location: 'Remote' | 'Hybrid' | 'Onsite';
     minMatchScore: number;
+    autoGenerateEssays: boolean;
   };
   structuredExperience?: {
     personalInfo: {
@@ -58,6 +59,44 @@ export interface IUser extends Document {
   };
   createdAt: Date;
   updatedAt: Date;
+  rejectedJobs: string[];
+  demographics?: {
+    gender: string;
+    race: string;
+    veteran: string;
+    disability: string;
+  };
+  commonReplies?: {
+    workAuth: string; // "Yes", "No"
+    sponsorship: string; // "Yes", "No"
+    relocation: string; // "Yes", "No"
+    formerEmployee: string; // "Yes", "No"
+  };
+  personalDetails?: {
+    phone: string;
+    address: string;
+    city: string;
+    state: string;
+    zip: string;
+    linkedin: string;
+    github: string;
+    portfolio: string;
+    university: string;
+    degree: string;
+    gpa: string;
+    gradMonth: string;
+    gradYear: string;
+  };
+  customAnswers?: {
+    pronouns: string;
+    conflictOfInterest: string;
+    familyRel: string;
+    govOfficial: string;
+  };
+  essayAnswers?: {
+    whyExcited: string;
+    howDidYouHear: string;
+  };
 }
 
 const UserSchema: Schema = new Schema({
@@ -74,14 +113,53 @@ const UserSchema: Schema = new Schema({
   }],
   gradYear: { type: Number, default: 2026 },
   preferences: {
-    location: { 
-      type: String, 
-      enum: ['Remote', 'Hybrid', 'Onsite'], 
-      default: 'Remote' 
+    location: {
+      type: String,
+      enum: ['Remote', 'Hybrid', 'Onsite'],
+      default: 'Remote'
     },
     minMatchScore: { type: Number, default: 80 },
+    autoGenerateEssays: { type: Boolean, default: false }
   },
-  structuredExperience: { type: Schema.Types.Mixed }
+  structuredExperience: { type: Schema.Types.Mixed },
+  rejectedJobs: [{ type: Schema.Types.ObjectId, ref: 'Job' }],
+  demographics: {
+    gender: { type: String, default: '' },
+    race: { type: String, default: '' },
+    veteran: { type: String, default: '' },
+    disability: { type: String, default: '' }
+  },
+  commonReplies: {
+    workAuth: { type: String, default: '' },
+    sponsorship: { type: String, default: '' },
+    relocation: { type: String, default: '' },
+    formerEmployee: { type: String, default: '' }
+  },
+  personalDetails: {
+    phone: { type: String, default: '' },
+    address: { type: String, default: '' },
+    city: { type: String, default: '' },
+    state: { type: String, default: '' },
+    zip: { type: String, default: '' },
+    linkedin: { type: String, default: '' },
+    github: { type: String, default: '' },
+    portfolio: { type: String, default: '' },
+    university: { type: String, default: '' },
+    degree: { type: String, default: '' },
+    gpa: { type: String, default: '' },
+    gradMonth: { type: String, default: '' },
+    gradYear: { type: String, default: '' }
+  },
+  customAnswers: {
+    pronouns: { type: String, default: '' },
+    conflictOfInterest: { type: String, default: 'No' },
+    familyRel: { type: String, default: 'No' },
+    govOfficial: { type: String, default: 'No' }
+  },
+  essayAnswers: {
+    whyExcited: { type: String, default: '' },
+    howDidYouHear: { type: String, default: '' }
+  }
 }, { timestamps: true });
 
 export const User = mongoose.model<IUser>('User', UserSchema);

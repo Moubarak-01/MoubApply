@@ -25,9 +25,12 @@ interface UploadedFile {
 }
 
 function AppContent() {
-  const { user, logout, loading: authLoading } = useAuth();
+  const { user, token, login, logout, loading: authLoading } = useAuth();
   const { theme, toggleTheme } = useTheme();
-  const [isLogin, setIsLogin] = useState(false);
+  const [isLogin, setIsLogin] = useState(() => {
+    // Default to login if user has previously logged in
+    return localStorage.getItem('hasAccount') === 'true';
+  });
   const assistantRef = useRef<any>(null);
 
   const [currentView, setCurrentView] = useState<View>('discovery');
@@ -39,6 +42,20 @@ function AppContent() {
   const [uploading, setUploading] = useState(false);
   const [reviewApp, setReviewApp] = useState<any | null>(null);
   const [hasLoadedInitialData, setHasLoadedInitialData] = useState(false);
+
+  // Profile form state - defaults must match UI select defaults!
+  const [isEditingProfile, setIsEditingProfile] = useState(false); // Profile edit mode
+  const [profileFormData, setProfileFormData] = useState({
+    personalDetails: {
+      phone: '', address: '', city: '', state: '', zip: '', linkedin: '', github: '', portfolio: '',
+      university: '', degree: '', gpa: '', gradMonth: '', gradYear: ''
+    },
+    demographics: { gender: 'Male', race: 'Black or African American', veteran: 'I am not a protected veteran', disability: 'No, I do not have a disability' },
+    commonReplies: { workAuth: 'Yes', sponsorship: 'No', relocation: 'Yes', formerEmployee: 'No' },
+    customAnswers: { pronouns: '', conflictOfInterest: 'No', familyRel: 'No', govOfficial: 'No' },
+    essayAnswers: { whyExcited: '', howDidYouHear: '' },
+    preferences: { autoGenerateEssays: false }
+  });
 
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
@@ -55,8 +72,8 @@ function AppContent() {
     if (!user) return;
     setLoadingData(true);
     try {
-      const response = await fetch('http://localhost:5000/api/jobs');
-      const jobsData = await response.json();
+      // Pass userId to filter out applied/rejected jobs
+      const jobsData = await api.getJobs(user._id);
       setJobs(jobsData);
       const userRes = await fetch('http://localhost:5000/api/auth/me', {
         headers: { Authorization: `Bearer ${localStorage.getItem('token')}` }
@@ -72,28 +89,60 @@ function AppContent() {
   };
 
   const handleIngest = async (query: string) => {
+    if (!user) return alert('Please log in first');
+    console.log(`🔍 [TELEMETRY] User ${user._id} initiating job ingest with query: "${query}"`);
     setLoadingData(true);
     try {
-      const res = await fetch('http://localhost:5000/api/jobs/ingest', {
+      await fetch('http://localhost:5000/api/jobs/ingest', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          query,
-          range: 'month',
-          clearFirst: true,
-          userId: user?._id
-        })
+        body: JSON.stringify({ query, userId: user._id })
       });
-      if (res.ok) {
-        await loadData();
-      } else {
-        alert("Ingestion failed. Check RAPIDAPI_KEY.");
-      }
+      console.log(`✅ [TELEMETRY] Job ingest successful`);
+      await loadData();
     } catch (err) {
-      console.error(err);
+      console.error(`❌ [TELEMETRY] Job ingest failed:`, err);
+      alert('Failed to fetch jobs');
     } finally {
       setLoadingData(false);
     }
+  };
+
+
+
+  const isProfileComplete = () => {
+    if (!user) return false;
+    const pd = profileFormData.personalDetails;
+    const demo = profileFormData.demographics;
+    const common = profileFormData.commonReplies;
+    const essay = profileFormData.essayAnswers;
+
+    // Debug: Show what's missing
+    const missing: string[] = [];
+    if (!pd.phone) missing.push('phone');
+    if (!pd.address) missing.push('address');
+    if (!pd.city) missing.push('city');
+    if (!pd.state) missing.push('state');
+    if (!pd.zip) missing.push('zip');
+    if (!pd.linkedin) missing.push('linkedin');
+    if (!pd.university) missing.push('university');
+    if (!pd.degree) missing.push('degree');
+    if (!demo.gender) missing.push('gender');
+    if (!demo.race) missing.push('race');
+    if (!demo.veteran) missing.push('veteran');
+    if (!demo.disability) missing.push('disability');
+    if (!common.workAuth) missing.push('workAuth');
+    if (!common.sponsorship) missing.push('sponsorship');
+    if (!common.relocation) missing.push('relocation');
+    if (!common.formerEmployee) missing.push('formerEmployee');
+    if (!essay.whyExcited) missing.push('whyExcited');
+    if (!essay.howDidYouHear) missing.push('howDidYouHear');
+
+    if (missing.length > 0) {
+      console.warn(`🚨 [PROFILE_CHECK] Missing fields:`, missing);
+    }
+
+    return missing.length === 0;
   };
 
   useEffect(() => {
@@ -107,25 +156,96 @@ function AppContent() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [user]);
 
+  // Sync user data to profile form (only override defaults if DB has actual values)
+  useEffect(() => {
+    if (user) {
+      // Helper: merge objects but only use source values if they're not empty strings
+      const smartMerge = (defaults: any, source: any) => {
+        if (!source) return defaults;
+        const result = { ...defaults };
+        for (const key of Object.keys(source)) {
+          if (source[key] !== '' && source[key] !== null && source[key] !== undefined) {
+            result[key] = source[key];
+          }
+        }
+        return result;
+      };
+
+      setProfileFormData(prev => ({
+        personalDetails: smartMerge(prev.personalDetails, user.personalDetails),
+        demographics: smartMerge(prev.demographics, user.demographics),
+        commonReplies: smartMerge(prev.commonReplies, user.commonReplies),
+        customAnswers: smartMerge(prev.customAnswers, user.customAnswers),
+        essayAnswers: smartMerge(prev.essayAnswers, user.essayAnswers),
+        preferences: smartMerge(prev.preferences, user.preferences)
+      }));
+    }
+  }, [user]);
+
   const handleSwipe = async (direction: 'right' | 'left', job: Job) => {
     if (direction === 'right' && user) {
+      console.log(`👉 [TELEMETRY] User ${user._id} swiped RIGHT on job: ${job.title} at ${job.company}`);
+      fetch('http://localhost:5000/api/telemetry', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ event: 'SWIPE_RIGHT', userId: user._id, data: { title: job.title, company: job.company, jobId: job._id } }) }).catch(() => { });
+
+      if (!isProfileComplete()) {
+        console.warn(`⚠️ [TELEMETRY] Profile incomplete! Blocking application.`);
+        fetch('http://localhost:5000/api/telemetry', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ event: 'PROFILE_INCOMPLETE', userId: user._id, data: {} }) }).catch(() => { });
+        alert('⚠️ Please complete your profile in the Profile tab before applying to jobs!');
+        setCurrentView('profile');
+        return;
+      }
+
       try {
-        await api.apply(user._id, job._id);
-        const appsRes = await api.getApplications(user._id);
-        setApplications(appsRes);
-      } catch (err) { console.error(err); }
+        const response = await api.apply(user._id, job._id);
+        console.log(`✅ [TELEMETRY] Application created: ${response._id}`);
+        alert(`Applied to ${job.title}!`);
+        const apps = await api.getApplications(user._id);
+        setApplications(apps);
+      } catch (err) {
+        console.error(`❌ [TELEMETRY] Application failed:`, err);
+        alert('Application failed');
+      }
+    } else if (direction === 'left') {
+      console.log(`👈 [TELEMETRY] User swiped LEFT (rejected) on job: ${job.title} at ${job.company}`);
+      if (user) {
+        fetch('http://localhost:5000/api/telemetry', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ event: 'SWIPE_LEFT', userId: user._id, data: { title: job.title, company: job.company, jobId: job._id } }) }).catch(() => { });
+        try {
+          await api.rejectJob(user._id, job._id);
+          console.log(`🚫 [TELEMETRY] Job ${job._id} permanently rejected`);
+        } catch (err) {
+          console.error(`❌ [TELEMETRY] Rejection failed:`, err);
+        }
+      }
     }
   };
 
-  const handleFileUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
-    if (event.target.files && event.target.files.length > 0 && user) {
-      setUploading(true);
-      try {
-        const filesArray = Array.from(event.target.files);
-        const response = await api.uploadFiles(user._id, filesArray);
-        setUploadedFiles(response.totalFiles);
-        alert(`Upload Success: ${response.parseStatus}`);
-      } catch (err) { alert("Failed to upload files."); console.error(err); } finally { setUploading(false); }
+  const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (!user) return;
+    const files = e.target.files;
+    if (!files || files.length === 0) return;
+
+    console.log(`📤 [TELEMETRY] User ${user._id} uploading ${files.length} file(s): ${Array.from(files).map(f => f.name).join(', ')}`);
+    fetch('http://localhost:5000/api/telemetry', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ event: 'RESUME_UPLOAD', userId: user._id, data: { filename: files[0].name, count: files.length } }) }).catch(() => { });
+    setUploading(true);
+    try {
+      const result = await api.uploadFiles(user._id, Array.from(files));
+      console.log(`✅ [TELEMETRY] Files uploaded successfully. Auto-populating profile from resume...`);
+      setUploadedFiles(result.allFiles);
+      alert('Files uploaded! Your profile has been auto-populated from your resume.');
+
+      // Refresh user data to get auto-populated fields
+      const refreshedUser = await api.getUser(token!);
+      console.log(`🔄 [TELEMETRY] Profile auto-populated with parsed resume data`);
+
+      if (token && refreshedUser) {
+        // Force update of global user state to reflect changes immediately
+        login(token, refreshedUser);
+      }
+    } catch (err: any) {
+      console.error(`❌ [TELEMETRY] File upload failed:`, err);
+      alert(err.message || 'Upload failed');
+    } finally {
+      setUploading(false);
     }
   };
 
@@ -149,6 +269,57 @@ function AppContent() {
         console.error(err);
       }
     }
+  };
+
+  const handleSaveProfile = async () => {
+    if (!user || !token) return;
+    try {
+      await api.updateUser(user._id, profileFormData);
+      const updatedUser = await api.getUser(token);
+      login(token, updatedUser);
+      setIsEditingProfile(false);
+      alert("✅ Profile saved successfully!");
+    } catch (err) {
+      console.error(err);
+      alert("Failed to save profile.");
+    }
+  };
+
+  const handleClearProfile = async () => {
+    if (!user || !token) return;
+    if (!confirm("⚠️ Are you sure you want to clear all profile data? This will erase your auto-filled answers.")) return;
+
+    const emptyUserInfo = {
+      personalDetails: { phone: '', address: '', city: '', state: '', zip: '', linkedin: '', github: '', portfolio: '', university: '', degree: '', gpa: '', gradMonth: '', gradYear: '' },
+      demographics: { gender: '', race: '', veteran: '', disability: '' },
+      commonReplies: { workAuth: '', sponsorship: '', relocation: '', formerEmployee: '' },
+      customAnswers: { pronouns: '', conflictOfInterest: 'No', familyRel: 'No', govOfficial: 'No' },
+      essayAnswers: { whyExcited: '', howDidYouHear: '' },
+      preferences: { autoGenerateEssays: false }
+    };
+
+    setProfileFormData(emptyUserInfo);
+
+    setIsEditingProfile(true); // Switch to edit mode to see changes? Or save immediately.
+    try {
+      await api.updateUser(user._id, emptyUserInfo);
+      const updated = await api.getUser(token);
+      login(token, updated);
+      alert("🗑️ Profile data cleared.");
+    } catch (e) {
+      console.error(e);
+      alert("Error clearing data");
+    }
+  };
+
+  const updateProfileField = (section: keyof typeof profileFormData, field: string, value: string | boolean) => {
+    setProfileFormData(prev => ({
+      ...prev,
+      [section]: {
+        ...prev[section] as any,
+        [field]: value
+      }
+    }));
   };
 
   if (authLoading) return <div className="h-screen flex items-center justify-center"><Loader2 className="w-8 h-8 animate-spin text-indigo-600" /></div>;
@@ -193,7 +364,7 @@ function AppContent() {
           </div>
         </header>
         <div className="flex-1 overflow-y-auto relative p-6">
-          {user && hasLoadedInitialData && uploadedFiles.length === 0 && currentView !== 'profile' && (
+          {user && hasLoadedInitialData && (!uploadedFiles || uploadedFiles.length === 0) && currentView !== 'profile' && (
             <div className="absolute inset-0 z-50 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-6">
               <div className="bg-white dark:bg-slate-900 rounded-3xl p-8 max-w-md w-full shadow-2xl text-center border border-slate-100 dark:border-slate-800">
                 <div className="w-20 h-20 bg-indigo-100 dark:bg-indigo-900/30 rounded-2xl flex items-center justify-center mx-auto mb-6 text-indigo-600 dark:text-indigo-400">
@@ -247,11 +418,56 @@ function AppContent() {
             </div>
           )}
           {currentView === 'tracker' && (
-            <Tracker
-              userId={user._id}
-              onReview={(app) => setReviewApp(app)}
-              onApplicationsChange={(updatedApps) => setApplications(updatedApps)}
-            />
+            <div className="flex flex-col h-full">
+              {/* Manual Job Input */}
+              <div className="px-6 pt-6 pb-2">
+                <div className="max-w-3xl flex gap-2">
+                  <input
+                    type="text"
+                    id="manual-job-link"
+                    placeholder="Paste any job link (LinkedIn, Lever, Greenhouse, Workday)..."
+                    className="flex-1 px-4 py-2 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-sm focus:ring-2 focus:ring-indigo-500"
+                    onKeyDown={async (e) => {
+                      if (e.key === 'Enter') {
+                        const val = (e.target as HTMLInputElement).value;
+                        if (val && user) {
+                          try {
+                            await api.createManualJob(user._id, val);
+                            (e.target as HTMLInputElement).value = '';
+                            const apps = await api.getApplications(user._id);
+                            setApplications(apps);
+                            alert("Job Added! Check 'Queued' column.");
+                          } catch (err) { alert("Failed to add link"); }
+                        }
+                      }
+                    }}
+                  />
+                  <button
+                    onClick={async () => {
+                      const input = document.getElementById('manual-job-link') as HTMLInputElement;
+                      if (input?.value && user) {
+                        try {
+                          await api.createManualJob(user._id, input.value);
+                          input.value = '';
+                          const apps = await api.getApplications(user._id);
+                          setApplications(apps);
+                          alert("Job Added! Check 'Queued' column.");
+                        } catch (err) { alert("Failed to add link"); }
+                      }
+                    }}
+                    className="bg-indigo-600 text-white px-4 py-2 rounded-xl font-bold text-sm hover:bg-indigo-700 transition-colors"
+                  >
+                    Add & Track
+                  </button>
+                </div>
+              </div>
+
+              <Tracker
+                userId={user._id}
+                onReview={(app) => setReviewApp(app)}
+                onApplicationsChange={(updatedApps) => setApplications(updatedApps)}
+              />
+            </div>
           )}
           {currentView === 'profile' && (
             <div className="max-w-2xl mx-auto py-10">
@@ -265,13 +481,288 @@ function AppContent() {
                   </div>
                 </div>
                 <div className="mt-8 flex flex-col gap-3">
-                  {uploadedFiles.map((file, index) => (
+                  {uploadedFiles?.map((file, index) => (
                     <div key={index} className="flex items-center p-3 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg group transition-colors">
                       <div className="p-2 bg-white dark:bg-slate-700 rounded-md border border-slate-100 dark:border-slate-600 mr-3 text-indigo-500 dark:text-indigo-400"><FileText className="w-5 h-5" /></div>
                       <div className="flex-1 min-w-0"><p className="font-medium text-slate-800 dark:text-white truncate">{file.originalName}</p></div>
                       <button onClick={() => handleDeleteFile(file.filename)} className="p-2 text-slate-400 hover:text-rose-500 opacity-0 group-hover:opacity-100"><Trash2 className="w-4 h-4" /></button>
                     </div>
                   ))}
+                </div>
+
+                {/* Auto-Fill Preferences Form */}
+                <div className="mt-10 border-t border-slate-200 dark:border-slate-800 pt-8">
+                  <div className="flex justify-between items-start mb-6">
+                    <div>
+                      <h3 className="text-xl font-bold text-slate-800 dark:text-white mb-2">🤖 Auto-Fill Preferences</h3>
+                      <p className="text-sm text-slate-500 dark:text-slate-400">
+                        The bot uses these answers to fill dropdowns automatically. Be accurate!
+                      </p>
+                    </div>
+                    <div className="flex gap-2">
+                      {!isEditingProfile ? (
+                        <button onClick={() => setIsEditingProfile(true)} className="px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 font-medium shadow-sm transition-all">
+                          ✏️ Edit Profile
+                        </button>
+                      ) : (
+                        <div className="flex gap-2 animate-in fade-in slide-in-from-right-4 duration-300">
+                          <button onClick={handleClearProfile} className="px-3 py-2 bg-rose-100 text-rose-600 rounded-lg hover:bg-rose-200 font-medium text-sm flex items-center gap-1 transition-colors">
+                            <Trash2 className="w-4 h-4" /> Clear
+                          </button>
+                          <button onClick={handleSaveProfile} className="px-4 py-2 bg-emerald-600 text-white rounded-lg hover:bg-emerald-700 font-bold shadow-sm flex items-center gap-1 transition-colors">
+                            <RefreshCw className="w-4 h-4" /> Save Changes
+                          </button>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    {/* Personal Details (Auto-Fill) */}
+                    <div className="space-y-4 md:col-span-2">
+                      <h4 className="font-bold text-slate-700 dark:text-slate-300 border-b pb-2 border-slate-200 dark:border-slate-700">📍 Personal Details (For Auto-Fill)</h4>
+                      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                        <label className="block">
+                          <span className="text-xs font-bold text-slate-500 uppercase">Phone</span>
+                          <input type="text" className="w-full mt-1 p-2 text-sm rounded-lg border dark:bg-slate-800 dark:border-slate-700 disabled:opacity-50 disabled:bg-slate-100 dark:disabled:bg-slate-900"
+                            placeholder="e.g. 555-123-4567"
+                            value={profileFormData.personalDetails?.phone || ""}
+                            onChange={(e) => updateProfileField('personalDetails', 'phone', e.target.value)}
+                            disabled={!isEditingProfile}
+                          />
+                        </label>
+                        <label className="block">
+                          <span className="text-xs font-bold text-slate-500 uppercase">Address</span>
+                          <input type="text" className="w-full mt-1 p-2 text-sm rounded-lg border dark:bg-slate-800 dark:border-slate-700 disabled:opacity-50 disabled:bg-slate-100 dark:disabled:bg-slate-900"
+                            placeholder="e.g. 123 Main St"
+                            value={profileFormData.personalDetails?.address || ""}
+                            onChange={(e) => updateProfileField('personalDetails', 'address', e.target.value)}
+                            disabled={!isEditingProfile}
+                          />
+                        </label>
+                        <label className="block">
+                          <span className="text-xs font-bold text-slate-500 uppercase">City</span>
+                          <input type="text" className="w-full mt-1 p-2 text-sm rounded-lg border dark:bg-slate-800 dark:border-slate-700 disabled:opacity-50 disabled:bg-slate-100 dark:disabled:bg-slate-900"
+                            placeholder="e.g. San Francisco"
+                            value={profileFormData.personalDetails?.city || ""}
+                            onChange={(e) => updateProfileField('personalDetails', 'city', e.target.value)}
+                            disabled={!isEditingProfile}
+                          />
+                        </label>
+                        <label className="block">
+                          <span className="text-xs font-bold text-slate-500 uppercase">State</span>
+                          <input type="text" className="w-full mt-1 p-2 text-sm rounded-lg border dark:bg-slate-800 dark:border-slate-700 disabled:opacity-50 disabled:bg-slate-100 dark:disabled:bg-slate-900"
+                            placeholder="e.g. CA"
+                            value={profileFormData.personalDetails?.state || ""}
+                            onChange={(e) => updateProfileField('personalDetails', 'state', e.target.value)}
+                            disabled={!isEditingProfile}
+                          />
+                        </label>
+                        <label className="block">
+                          <span className="text-xs font-bold text-slate-500 uppercase">Zip</span>
+                          <input type="text" className="w-full mt-1 p-2 text-sm rounded-lg border dark:bg-slate-800 dark:border-slate-700 disabled:opacity-50 disabled:bg-slate-100 dark:disabled:bg-slate-900"
+                            placeholder="e.g. 94105"
+                            value={profileFormData.personalDetails?.zip || ""}
+                            onChange={(e) => updateProfileField('personalDetails', 'zip', e.target.value)}
+                            disabled={!isEditingProfile}
+                          />
+                        </label>
+                        <label className="block">
+                          <span className="text-xs font-bold text-slate-500 uppercase">LinkedIn URL</span>
+                          <input type="text" className="w-full mt-1 p-2 text-sm rounded-lg border dark:bg-slate-800 dark:border-slate-700 disabled:opacity-50 disabled:bg-slate-100 dark:disabled:bg-slate-900"
+                            placeholder="https://linkedin.com/in/..."
+                            value={profileFormData.personalDetails?.linkedin || ""}
+                            onChange={(e) => updateProfileField('personalDetails', 'linkedin', e.target.value)}
+                            disabled={!isEditingProfile}
+                          />
+                        </label>
+                        <label className="block">
+                          <span className="text-xs font-bold text-slate-500 uppercase">University</span>
+                          <input type="text" className="w-full mt-1 p-2 text-sm rounded-lg border dark:bg-slate-800 dark:border-slate-700 disabled:opacity-50 disabled:bg-slate-100 dark:disabled:bg-slate-900"
+                            placeholder="e.g. Stanford University"
+                            value={profileFormData.personalDetails?.university || ""}
+                            onChange={(e) => updateProfileField('personalDetails', 'university', e.target.value)}
+                            disabled={!isEditingProfile}
+                          />
+                        </label>
+                        <label className="block">
+                          <span className="text-xs font-bold text-slate-500 uppercase">Degree</span>
+                          <input type="text" className="w-full mt-1 p-2 text-sm rounded-lg border dark:bg-slate-800 dark:border-slate-700 disabled:opacity-50 disabled:bg-slate-100 dark:disabled:bg-slate-900"
+                            placeholder="e.g. BS Computer Science"
+                            value={profileFormData.personalDetails?.degree || ""}
+                            onChange={(e) => updateProfileField('personalDetails', 'degree', e.target.value)}
+                            disabled={!isEditingProfile}
+                          />
+                        </label>
+                        <label className="block">
+                          <span className="text-xs font-bold text-slate-500 uppercase">GPA</span>
+                          <input type="text" className="w-full mt-1 p-2 text-sm rounded-lg border dark:bg-slate-800 dark:border-slate-700 disabled:opacity-50 disabled:bg-slate-100 dark:disabled:bg-slate-900"
+                            placeholder="e.g. 3.8"
+                            value={profileFormData.personalDetails?.gpa || ""}
+                            onChange={(e) => updateProfileField('personalDetails', 'gpa', e.target.value)}
+                            disabled={!isEditingProfile}
+                          />
+                        </label>
+                      </div>
+                    </div>
+
+                    {/* Demographics */}
+                    <div className="space-y-4">
+                      <h4 className="font-bold text-slate-700 dark:text-slate-300">Demographics</h4>
+                      <label className="block">
+                        <span className="text-sm font-medium text-slate-600 dark:text-slate-400">Gender</span>
+                        <select
+                          className="w-full mt-1 p-2 rounded-lg border dark:bg-slate-800 dark:border-slate-700 disabled:opacity-50"
+                          value={profileFormData.demographics?.gender || "Male"}
+                          onChange={(e) => updateProfileField('demographics', 'gender', e.target.value)}
+                          disabled={!isEditingProfile}
+                        >
+                          <option>Male</option><option>Female</option><option>Non-binary</option><option>Decline to Identify</option>
+                        </select>
+                      </label>
+                      <label className="block">
+                        <span className="text-sm font-medium text-slate-600 dark:text-slate-400">Race</span>
+                        <select
+                          className="w-full mt-1 p-2 rounded-lg border dark:bg-slate-800 dark:border-slate-700 disabled:opacity-50"
+                          value={profileFormData.demographics?.race || "Black or African American"}
+                          onChange={(e) => updateProfileField('demographics', 'race', e.target.value)}
+                          disabled={!isEditingProfile}
+                        >
+                          <option>Black or African American</option><option>White</option><option>Asian</option><option>Hispanic/Latino</option>
+                        </select>
+                      </label>
+                      <label className="block">
+                        <span className="text-sm font-medium text-slate-600 dark:text-slate-400">Veteran Status</span>
+                        <select
+                          className="w-full mt-1 p-2 rounded-lg border dark:bg-slate-800 dark:border-slate-700 disabled:opacity-50"
+                          value={profileFormData.demographics?.veteran || "I am not a protected veteran"}
+                          onChange={(e) => updateProfileField('demographics', 'veteran', e.target.value)}
+                          disabled={!isEditingProfile}
+                        >
+                          <option>I am not a protected veteran</option><option>I am a protected veteran</option><option>Decline to Identify</option>
+                        </select>
+                      </label>
+                      <label className="block">
+                        <span className="text-sm font-medium text-slate-600 dark:text-slate-400">Disability</span>
+                        <select
+                          className="w-full mt-1 p-2 rounded-lg border dark:bg-slate-800 dark:border-slate-700 disabled:opacity-50"
+                          value={profileFormData.demographics?.disability || "No, I do not have a disability"}
+                          onChange={(e) => updateProfileField('demographics', 'disability', e.target.value)}
+                          disabled={!isEditingProfile}
+                        >
+                          <option>No, I do not have a disability</option><option>Yes, I have a disability</option><option>Decline to Identify</option>
+                        </select>
+                      </label>
+                    </div>
+
+                    {/* Common Questions */}
+                    <div className="space-y-4">
+                      <h4 className="font-bold text-slate-700 dark:text-slate-300">Common Questions</h4>
+                      <label className="block">
+                        <span className="text-sm font-medium text-slate-600 dark:text-slate-400">Work Authorization?</span>
+                        <select
+                          className="w-full mt-1 p-2 rounded-lg border dark:bg-slate-800 dark:border-slate-700 disabled:opacity-50"
+                          value={profileFormData.commonReplies?.workAuth || "Yes"}
+                          onChange={(e) => updateProfileField('commonReplies', 'workAuth', e.target.value)}
+                          disabled={!isEditingProfile}
+                        >
+                          <option>Yes</option><option>No</option>
+                        </select>
+                      </label>
+                      <label className="block">
+                        <span className="text-sm font-medium text-slate-600 dark:text-slate-400">Require Sponsorship?</span>
+                        <select
+                          className="w-full mt-1 p-2 rounded-lg border dark:bg-slate-800 dark:border-slate-700 disabled:opacity-50"
+                          value={profileFormData.commonReplies?.sponsorship || "No"}
+                          onChange={(e) => updateProfileField('commonReplies', 'sponsorship', e.target.value)}
+                          disabled={!isEditingProfile}
+                        >
+                          <option>No</option><option>Yes</option>
+                        </select>
+                      </label>
+                      <label className="block">
+                        <span className="text-sm font-medium text-slate-600 dark:text-slate-400">Open to Relocation?</span>
+                        <select
+                          className="w-full mt-1 p-2 rounded-lg border dark:bg-slate-800 dark:border-slate-700 disabled:opacity-50"
+                          value={profileFormData.commonReplies?.relocation || "Yes"}
+                          onChange={(e) => updateProfileField('commonReplies', 'relocation', e.target.value)}
+                          disabled={!isEditingProfile}
+                        >
+                          <option>Yes</option><option>No</option>
+                        </select>
+                      </label>
+                      <label className="block">
+                        <span className="text-sm font-medium text-slate-600 dark:text-slate-400">Former Employee?</span>
+                        <select
+                          className="w-full mt-1 p-2 rounded-lg border dark:bg-slate-800 dark:border-slate-700 disabled:opacity-50"
+                          value={profileFormData.commonReplies?.formerEmployee || "No"}
+                          onChange={(e) => updateProfileField('commonReplies', 'formerEmployee', e.target.value)}
+                          disabled={!isEditingProfile}
+                        >
+                          <option>No</option><option>Yes</option>
+                        </select>
+                      </label>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Detailed Q&A (New) */}
+                <div className="mt-8 pt-8 border-t border-slate-200 dark:border-slate-800">
+                  <h4 className="font-bold text-slate-700 dark:text-slate-300 border-b pb-2 border-slate-200 dark:border-slate-700 mb-4">📝 Detailed Q&A (Essays & Misc)</h4>
+                  <div className="grid grid-cols-1 gap-6">
+                    {/* Auto-Generate Toggle */}
+                    <label className="flex items-center gap-3 p-4 bg-gradient-to-r from-indigo-50 to-purple-50 dark:from-indigo-900/20 dark:to-purple-900/20 rounded-xl border border-indigo-100 dark:border-indigo-800 cursor-pointer hover:shadow-md transition-all">
+                      <input
+                        type="checkbox"
+                        checked={!!profileFormData.preferences?.autoGenerateEssays}
+                        onChange={(e) => updateProfileField('preferences', 'autoGenerateEssays', e.target.checked)}
+                        disabled={!isEditingProfile}
+                        className="w-5 h-5 text-indigo-600 rounded border-slate-300 focus:ring-indigo-500 disabled:opacity-50"
+                      />
+                      <div>
+                        <span className="font-bold text-indigo-700 dark:text-indigo-300">✨ Auto-Generate "Why Us" for each job</span>
+                        <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">AI will write a tailored essay for every application using your resume and the job description.</p>
+                      </div>
+                    </label>
+
+                    <label className="block">
+                      <span className="text-xs font-bold text-slate-500 uppercase">Why do you want to join? (Fallback / Generic "Why Us")</span>
+                      <textarea className="w-full mt-1 p-2 text-sm rounded-lg border dark:bg-slate-800 dark:border-slate-700 h-24 disabled:opacity-50 disabled:bg-slate-100 dark:disabled:bg-slate-900"
+                        placeholder="I admire the mission..."
+                        value={profileFormData.essayAnswers?.whyExcited || ""}
+                        onChange={(e) => updateProfileField('essayAnswers', 'whyExcited', e.target.value)}
+                        disabled={!isEditingProfile}
+                      />
+                    </label>
+                    <label className="block">
+                      <span className="text-xs font-bold text-slate-500 uppercase">How did you hear about us?</span>
+                      <input type="text" className="w-full mt-1 p-2 text-sm rounded-lg border dark:bg-slate-800 dark:border-slate-700 disabled:opacity-50 disabled:bg-slate-100 dark:disabled:bg-slate-900"
+                        placeholder="e.g. LinkedIn, Glassdoor, Referral"
+                        value={profileFormData.essayAnswers?.howDidYouHear || ""}
+                        onChange={(e) => updateProfileField('essayAnswers', 'howDidYouHear', e.target.value)}
+                        disabled={!isEditingProfile}
+                      />
+                    </label>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                      <label className="block">
+                        <span className="text-xs font-bold text-slate-500 uppercase">Preferred Pronouns</span>
+                        <input type="text" className="w-full mt-1 p-2 text-sm rounded-lg border dark:bg-slate-800 dark:border-slate-700 disabled:opacity-50 disabled:bg-slate-100 dark:disabled:bg-slate-900"
+                          placeholder="e.g. He/Him, She/Her, They/Them"
+                          value={profileFormData.customAnswers?.pronouns || ""}
+                          onChange={(e) => updateProfileField('customAnswers', 'pronouns', e.target.value)}
+                          disabled={!isEditingProfile}
+                        />
+                      </label>
+                      <label className="block">
+                        <span className="text-xs font-bold text-slate-500 uppercase">Confidence Scale (1-5)</span>
+                        <input type="text" className="w-full mt-1 p-2 text-sm rounded-lg border dark:bg-slate-800 dark:border-slate-700 disabled:opacity-50 disabled:bg-slate-100 dark:disabled:bg-slate-900"
+                          placeholder="Very Confident"
+                          defaultValue={"Very Confident"}
+                          disabled
+                        />
+                      </label>
+                    </div>
+                  </div>
                 </div>
               </div>
             </div>
@@ -307,7 +798,7 @@ function AppContent() {
             </div>
           )}
         </div>
-      </main>
+      </main >
       <AiAssistant ref={assistantRef} userId={user._id} jobs={jobs} applications={applications} />
       <JobDetailModal job={selectedJob} onClose={() => setSelectedJob(null)} />
       <ReviewModal
@@ -319,7 +810,7 @@ function AppContent() {
           } catch (err) { alert("Apply failed"); }
         }}
       />
-    </div>
+    </div >
   );
 }
 

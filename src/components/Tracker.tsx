@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Clock, Loader2, CheckCircle2, AlertCircle, Zap, Wand2, Eye } from 'lucide-react';
+import { Clock, Loader2, CheckCircle2, AlertCircle, Zap, Wand2, Eye, ExternalLink } from 'lucide-react';
 import { clsx } from 'clsx';
 import { api } from '../services/api';
 
@@ -11,6 +11,8 @@ interface Application {
   date: string;
   tailoredPdfUrl?: string;
   coverLetter?: string;
+  applyLink?: string;
+  updatedAt?: string;
 }
 
 const statusConfig = {
@@ -35,15 +37,19 @@ export const Tracker: React.FC<TrackerProps> = ({ userId, onReview, onApplicatio
     try {
       const response = await fetch(`http://localhost:5000/api/applications?userId=${userId}`);
       const data = await response.json();
-      const formattedApps = data.map((app: any) => ({
-        _id: app._id,
-        company: app.jobId.company,
-        role: app.jobId.title,
-        status: app.status,
-        date: new Date(app.createdAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }),
-        tailoredPdfUrl: app.tailoredPdfUrl,
-        coverLetter: app.coverLetter
-      }));
+      const formattedApps = data
+        .filter((app: any) => app.jobId) // Filter out apps where job was deleted
+        .map((app: any) => ({
+          _id: app._id,
+          company: app.jobId.company || 'Unknown Company',
+          role: app.jobId.title || 'Unknown Role',
+          status: app.status,
+          date: new Date(app.createdAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }),
+          tailoredPdfUrl: app.tailoredPdfUrl,
+          coverLetter: app.coverLetter,
+          applyLink: app.jobId.applyLink,
+          updatedAt: app.updatedAt ? new Date(app.updatedAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' }) : ''
+        }));
       setApplications(formattedApps);
       if (onApplicationsChange) onApplicationsChange(formattedApps);
     } catch (error) {
@@ -100,7 +106,47 @@ export const Tracker: React.FC<TrackerProps> = ({ userId, onReview, onApplicatio
                 <div key={app._id} className="bg-white dark:bg-slate-900 p-4 rounded-xl shadow-sm border border-slate-100 dark:border-slate-800 hover:shadow-md transition-all">
                   <h4 className="font-bold text-slate-800 dark:text-white">{app.company}</h4>
                   <p className="text-sm text-slate-500 dark:text-slate-400 mb-2">{app.role}</p>
+
+                  {/* Processing State Hint */}
+                  {status === 'Processing' && (
+                    <div className="mb-3 px-3 py-2 bg-indigo-50 dark:bg-indigo-900/20 border border-indigo-100 dark:border-indigo-900/40 rounded-lg flex items-start gap-2">
+                      <div className="mt-0.5 relative">
+                        <span className="animate-ping absolute inline-flex h-2 w-2 rounded-full bg-indigo-400 opacity-75"></span>
+                        <span className="relative inline-flex rounded-full h-2 w-2 bg-indigo-500"></span>
+                      </div>
+                      <div className="flex-1">
+                        <p className="text-xs font-bold text-indigo-700 dark:text-indigo-300">Browser is Open!</p>
+                        <p className="text-[10px] text-indigo-600 dark:text-indigo-400 leading-tight mt-0.5">
+                          Please check the popup window, review the form, and click "Submit".
+                        </p>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Applied Date Badge */}
+                  {status === 'Applied' && (
+                    <div className="mb-3 flex items-center gap-1.5 text-xs font-medium text-emerald-600 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-900/20 px-2.5 py-1 rounded-md border border-emerald-100 dark:border-emerald-900/40">
+                      <CheckCircle2 className="w-3.5 h-3.5" />
+                      Applied on {app.updatedAt}
+                    </div>
+                  )}
+
                   <div className="flex flex-wrap items-center gap-2 mt-3">
+
+                    {/* Always visible: View Job Link */}
+                    {app.applyLink && (
+                      <a
+                        href={app.applyLink}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="flex items-center gap-1 bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-300 border border-slate-200 dark:border-slate-700 px-3 py-1.5 rounded-lg text-[10px] font-bold hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors"
+                        title="Open Job in New Tab"
+                      >
+                        <ExternalLink className="w-3 h-3" />
+                        Job
+                      </a>
+                    )
+                    }
 
                     {status === 'Queued' && (
                       <button

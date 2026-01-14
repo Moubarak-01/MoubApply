@@ -5,6 +5,46 @@ interface User {
   name: string;
   email: string;
   resumes?: any[];
+  demographics?: {
+    gender: string;
+    race: string;
+    veteran: string;
+    disability: string;
+  };
+  commonReplies?: {
+    workAuth: string;
+    sponsorship: string;
+    relocation: string;
+    formerEmployee: string;
+  };
+  personalDetails?: {
+    phone: string;
+    address: string;
+    city: string;
+    state: string;
+    zip: string;
+    linkedin: string;
+    github: string;
+    portfolio: string;
+    university: string;
+    degree: string;
+    gpa: string;
+  };
+  customAnswers?: {
+    pronouns: string;
+    conflictOfInterest: string;
+    familyRel: string;
+    govOfficial: string;
+  };
+  essayAnswers?: {
+    whyExcited: string;
+    howDidYouHear: string;
+  };
+  preferences?: {
+    location?: string;
+    minMatchScore?: number;
+    autoGenerateEssays?: boolean;
+  };
 }
 
 interface AuthContextType {
@@ -52,6 +92,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   const login = (newToken: string, newUser: User) => {
     localStorage.setItem('token', newToken);
+    localStorage.setItem('hasAccount', 'true'); // Mark as returning user
     setToken(newToken);
     setUser(newUser);
   };

@@ -34,11 +34,44 @@ dotenv.config();
 const app = express();
 const PORT = process.env.PORT || 5000;
 
+// Startup telemetry banner
+console.log(`
+╔════════════════════════════════════════════════════════════╗
+║  🚀 MoubApply Backend v2.0 - AI Telemetry ACTIVE           ║
+║  📡 All API requests will be logged below                  ║
+║  🤖 AI model usage will show: "AI Request | Model: ..."    ║
+╚════════════════════════════════════════════════════════════╝
+`);
+
 app.use(cors());
 app.use(express.json());
-// Serve uploaded files and generated PDFs statically
 app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
 app.use('/generated_pdfs', express.static(path.join(__dirname, 'generated_pdfs')));
+
+// --- GLOBAL LOGGING MIDDLEWARE ---
+app.use((req, res, next) => {
+    const start = Date.now();
+    const requestId = Math.random().toString(36).substring(7); // Simple ID
+    const timestamp = new Date().toISOString();
+
+    console.group(`[SYSTEM] Request ${requestId} | ${req.method} ${req.url} | ${timestamp}`);
+
+    if (req.method === 'POST' || req.method === 'PUT') {
+        const sanitizedBody = { ...req.body };
+        // Redact sensitive fields if any (e.g. passwords, though typically in Auth header)
+        if (sanitizedBody.password) sanitizedBody.password = '***';
+        console.log(`[SYSTEM] Body Payload:`, JSON.stringify(sanitizedBody).slice(0, 500) + (JSON.stringify(sanitizedBody).length > 500 ? '...' : ''));
+    }
+
+    // Capture response time
+    res.on('finish', () => {
+        const duration = Date.now() - start;
+        console.log(`[SYSTEM] Response ${requestId}: Status ${res.statusCode} (${duration}ms)`);
+        console.groupEnd();
+    });
+
+    next();
+});
 
 // --- CONFIGURATION ---
 
@@ -80,10 +113,12 @@ const clearUploadsOnStart = async () => {
             fs.readdirSync(dir).forEach(file => {
                 const filePath = path.join(dir, file);
                 if (fs.lstatSync(filePath).isFile()) {
-                    fs.unlinkSync(filePath);
+                    // Only delete files older than 1 minute to avoid race conditions with quick restarts
+                    // But for "session ends", basic wipe is fine.
+                    try { fs.unlinkSync(filePath); } catch (e) { }
                 }
             });
-            console.log(`🧹 ${path.basename(dir)} directory cleared.`);
+            console.log(`🧹 Session Start: Cleared ${path.basename(dir)} directory.`);
         } else {
             fs.mkdirSync(dir);
         }
@@ -116,6 +151,35 @@ app.post('/api/auth/signup', signup);
 app.post('/api/auth/login', login);
 app.get('/api/auth/me', getMe);
 app.post('/api/auth/delete-account', deleteAccount);
+
+// Telemetry Endpoint - Mirrors frontend console logs to backend terminal
+app.post('/api/telemetry', (req: Request, res: Response) => {
+    const { event, userId, data, timestamp } = req.body;
+    const time = timestamp || new Date().toISOString();
+
+    // Format based on event type
+    switch (event) {
+        case 'SWIPE_LEFT':
+            console.log(`👈 [BACKEND] User ${userId} REJECTED job: ${data.title} at ${data.company}`);
+            break;
+        case 'SWIPE_RIGHT':
+            console.log(`👉 [BACKEND] User ${userId} LIKED job: ${data.title} at ${data.company}`);
+            break;
+        case 'PROFILE_INCOMPLETE':
+            console.warn(`⚠️ [BACKEND] User ${userId} blocked - Profile incomplete. Missing: ${data.missing?.join(', ') || 'unknown'}`);
+            break;
+        case 'RESUME_UPLOAD':
+            console.log(`📤 [BACKEND] User ${userId} uploaded resume: ${data.filename}`);
+            break;
+        case 'AI_ASSISTANT':
+            console.log(`🤖 [BACKEND] User ${userId} asked AI: "${data.message?.slice(0, 50)}..."`);
+            break;
+        default:
+            console.log(`📡 [BACKEND] Event: ${event} | User: ${userId} | Data:`, data);
+    }
+
+    res.json({ received: true });
+});
 
 // Tailor Resume Route
 app.post('/api/applications/:id/tailor', async (req: Request, res: Response): Promise<any> => {
@@ -418,6 +482,7 @@ let isIngesting = false;
 app.post('/api/jobs/ingest', async (req: Request, res: Response): Promise<any> => {
     try {
         const { clearFirst, userId, query } = req.body;
+        console.log(`🔍 [TELEMETRY] Job ing ingest initiated - User: ${userId}, Query: "${query}", Clear first: ${clearFirst}`);
 
         if (isIngesting) {
             return res.status(429).json({ error: 'Ingestion already in progress. Please wait.' });
@@ -448,6 +513,7 @@ app.post('/api/jobs/ingest', async (req: Request, res: Response): Promise<any> =
 
 // Upload Resume/File Route
 app.post('/api/user/upload', upload.array('files', 6), async (req: Request, res: Response): Promise<any> => {
+    console.error(`🏁 [DEBUG] Entering /api/user/upload route handler`);
     try {
         const userId = req.body.userId;
         if (!userId) {
@@ -461,8 +527,11 @@ app.post('/api/user/upload', upload.array('files', 6), async (req: Request, res:
 
         const user = await User.findById(userId);
         if (!user) {
+            console.error(`⚠️ [TELEMETRY] File upload failed - User not found: ${userId}`);
             return res.status(404).json({ error: 'User not found' });
         }
+
+        console.error(`📤 [TELEMETRY] User ${userId} uploading ${files.length} file(s): ${files.map(f => f.originalname).join(', ')}`);
 
         // Add new files to user record
         const newFiles = files.map(file => ({
@@ -488,12 +557,14 @@ app.post('/api/user/upload', upload.array('files', 6), async (req: Request, res:
         const docxFile = files.find(f => f.mimetype === 'application/vnd.openxmlformats-officedocument.wordprocessingml.document');
         const txtFile = files.find(f => f.mimetype === 'text/plain');
 
+
         if (pdfFile) {
-            console.log(`Parsing PDF: ${pdfFile.originalname}`);
+            console.log(`📄 [TELEMETRY] Parsing PDF: ${pdfFile.originalname} for user ${userId}`);
             const dataBuffer = fs.readFileSync(pdfFile.path);
             const data = await pdf(dataBuffer);
             extractedText = data.text;
             parseStatus = 'PDF parsed successfully.';
+            console.log(`✅ [TELEMETRY] PDF parsed - extracted ${extractedText.length} characters`);
         } else if (docxFile) {
             console.log(`Parsing DOCX: ${docxFile.originalname}`);
             const result = await mammoth.extractRawText({ path: docxFile.path });
@@ -517,6 +588,41 @@ app.post('/api/user/upload', upload.array('files', 6), async (req: Request, res:
                 console.log("✅ AI successfully structured the user's career data.");
             } catch (err) {
                 console.error("Failed to structure data:", err);
+            }
+        }
+
+        // Auto-populate personalDetails from structured experience (if available)
+        if (user.structuredExperience) {
+            const exp = user.structuredExperience;
+
+            // Only populate if personalDetails fields are empty
+            if (!user.personalDetails) user.personalDetails = {} as any;
+            const pd = user.personalDetails!;
+
+            if (exp.personalInfo) {
+                if (!pd.phone && exp.personalInfo.phone) {
+                    pd.phone = exp.personalInfo.phone;
+                }
+                if (!pd.linkedin && exp.personalInfo.linkedin) {
+                    pd.linkedin = exp.personalInfo.linkedin;
+                }
+                if (!pd.github && exp.personalInfo.github) {
+                    pd.github = exp.personalInfo.github;
+                }
+            }
+
+            // Populate education if available
+            if (exp.education && exp.education.length > 0) {
+                const edu = exp.education[0]; // Use first education entry
+                if (!pd.university && edu.institution) {
+                    pd.university = edu.institution;
+                }
+                if (!pd.degree && edu.degree) {
+                    pd.degree = edu.degree;
+                }
+                if (!pd.gpa && edu.gpa) {
+                    pd.gpa = edu.gpa;
+                }
             }
         }
 
@@ -601,9 +707,30 @@ app.get('/api/user', async (req: Request, res: Response): Promise<any> => {
     }
 });
 
-app.get('/api/jobs', async (req: Request, res: Response) => {
+app.get('/api/jobs', async (req: Request, res: Response): Promise<any> => {
     try {
-        const jobs = await Job.find().sort({ createdAt: -1 });
+        const userId = req.query.userId as string;
+        let query = {};
+
+        if (userId) {
+            const user = await User.findById(userId);
+            if (user) {
+                // 1. Get IDs of jobs user has applied to
+                const applications = await Application.find({ userId });
+                const appliedJobIds = applications.map(app => app.jobId);
+
+                // 2. Get IDs of jobs user has rejected
+                const rejectedJobIds = user.rejectedJobs || [];
+
+                // 3. Filter query to exclude both
+                query = {
+                    _id: { $nin: [...appliedJobIds, ...rejectedJobIds] }
+                };
+            }
+        }
+
+        const jobs = await Job.find(query).sort({ createdAt: -1 });
+        console.log(`✅ [TELEMETRY] Fetched ${jobs.length} jobs for user ${userId || 'anonymous'}.`);
         res.json(jobs);
     } catch (error) {
         console.error('Error fetching jobs:', error);
@@ -611,11 +738,76 @@ app.get('/api/jobs', async (req: Request, res: Response) => {
     }
 });
 
+// Reject Job Route
+app.post('/api/jobs/:id/reject', async (req: Request, res: Response): Promise<any> => {
+    try {
+        const jobId = req.params.id;
+        const { userId } = req.body;
+        console.log(`🚫 [TELEMETRY] Job rejection attempt - User: ${userId}, Job: ${jobId}`);
+
+        if (!userId) {
+            console.warn(`⚠️ [TELEMETRY] Job rejection failed - userId missing for job ${jobId}`);
+            return res.status(400).json({ error: 'userId required' });
+        }
+
+        await User.findByIdAndUpdate(userId, {
+            $addToSet: { rejectedJobs: jobId }
+        });
+
+        console.log(`✅ [TELEMETRY] Job rejected successfully - User: ${userId}, Job: ${jobId}`);
+        res.json({ message: 'Job rejected' });
+    } catch (error) {
+        console.error('Error rejecting job:', error);
+        res.status(500).json({ error: 'Internal Server Error' });
+    }
+});
+
+// Manual Job Route
+app.post('/api/jobs/manual', async (req: Request, res: Response): Promise<any> => {
+    try {
+        const { userId, url } = req.body;
+        console.log(`✍️ [TELEMETRY] Manual job creation attempt - User: ${userId}, URL: ${url}`);
+        if (!userId || !url) {
+            console.warn(`⚠️ [TELEMETRY] Manual job creation failed - Missing userId or URL.`);
+            return res.status(400).json({ error: 'userId and url required' });
+        }
+
+        // Create a placeholder job
+        const job = new Job({
+            title: 'External Application',
+            company: new URL(url).hostname.replace('www.', ''),
+            location: 'Unknown',
+            applyLink: url,
+            description: 'Manually added via link.',
+            rawDescription: 'Manually added via link.',
+            gradYearReq: 2026
+        });
+        await job.save();
+        console.log(`➕ [TELEMETRY] Manual job created - Job ID: ${job._id}, URL: ${url}`);
+
+        // Create application
+        const application = new Application({
+            userId,
+            jobId: job._id,
+            status: ApplicationStatus.QUEUED
+        });
+        await application.save();
+        console.log(`➕ [TELEMETRY] Application created for manual job - App ID: ${application._id}`);
+
+        res.json(application);
+    } catch (error) {
+        console.error('Manual job error:', error);
+        res.status(500).json({ error: 'Failed to add manual job' });
+    }
+});
+
 app.post('/api/applications', async (req: Request, res: Response): Promise<any> => {
     try {
         const { userId, jobId } = req.body;
+        console.log(`👉 [TELEMETRY] Application request - User: ${userId}, Job: ${jobId}`);
 
         if (!userId || !jobId) {
+            console.warn(`⚠️ [TELEMETRY] Application creation failed - Missing userId or jobId.`);
             return res.status(400).json({ error: 'userId and jobId are required' });
         }
 
@@ -626,12 +818,39 @@ app.post('/api/applications', async (req: Request, res: Response): Promise<any> 
             { upsert: true, new: true }
         );
 
+        console.log(`✅ [TELEMETRY] Application created - ID: ${application._id}`);
         return res.status(201).json(application);
     } catch (error) {
         console.error('Error creating application:', error);
         return res.status(500).json({ error: 'Internal Server Error' });
     }
 });
+
+// Update User Profile Route
+app.put('/api/user', async (req: Request, res: Response): Promise<any> => {
+    try {
+        const { userId, demographics, commonReplies, personalDetails, customAnswers, essayAnswers } = req.body;
+        console.log(`💾 [TELEMETRY] Profile update request - User: ${userId}`);
+        if (!userId) return res.status(400).json({ error: 'userId required' });
+
+        const update: any = {};
+        if (demographics) update.demographics = demographics;
+        if (commonReplies) update.commonReplies = commonReplies;
+        if (personalDetails) update.personalDetails = personalDetails;
+        if (customAnswers) update.customAnswers = customAnswers;
+        if (essayAnswers) update.essayAnswers = essayAnswers;
+
+        const user = await User.findByIdAndUpdate(userId, { $set: update }, { new: true });
+        console.log(`✅ [TELEMETRY] Profile updated successfully - User: ${userId}`);
+        res.json(user);
+    } catch (error) {
+        console.error('Update user error:', error);
+        res.status(500).json({ error: 'Failed to update user' });
+    }
+});
+
+// Auth endpoints
+app.get('/api/auth/me', getMe);
 
 app.listen(PORT, () => {
     console.log(`Server is running on port ${PORT}`);

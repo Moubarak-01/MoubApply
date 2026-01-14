@@ -24,14 +24,25 @@ export const Signup: React.FC<{ onSwitch: () => void }> = ({ onSwitch }) => {
       });
 
       const text = await res.text();
+      let data;
       try {
-          const data = JSON.parse(text);
-          if (!res.ok) throw new Error(data.error || 'Signup failed');
-          login(data.token, data.user);
+        data = JSON.parse(text);
       } catch (e) {
-          console.error("Server returned non-JSON:", text);
-          throw new Error("Server error: Please check if the backend is running on port 5000");
+        console.error("Server returned non-JSON:", text);
+        throw new Error("Server error: Please check if the backend is running on port 5000");
       }
+
+      // Check if duplicate email - redirect to login
+      if (data.shouldRedirectToLogin) {
+        setError(data.error + ' Redirecting to login...');
+        setTimeout(() => onSwitch(), 2000); // Switch to login after 2 seconds
+        return;
+      }
+
+      if (data.error) throw new Error(data.error);
+
+      if (!res.ok) throw new Error(data.error || 'Signup failed');
+      login(data.token, data.user);
 
     } catch (err: any) {
       setError(err.message);
@@ -45,22 +56,22 @@ export const Signup: React.FC<{ onSwitch: () => void }> = ({ onSwitch }) => {
       <div className="max-w-md w-full bg-white p-8 rounded-2xl shadow-xl border border-slate-100">
         <div className="flex justify-center mb-6">
           <div className="w-12 h-12 bg-indigo-600 rounded-xl flex items-center justify-center shadow-lg shadow-indigo-200">
-             <Layers className="text-white w-7 h-7" />
+            <Layers className="text-white w-7 h-7" />
           </div>
         </div>
         <h2 className="text-2xl font-bold text-center text-slate-800 mb-8">Create Account</h2>
-        
+
         {error && (
-            <div className="bg-rose-50 text-rose-600 p-3 rounded-lg text-sm mb-4 text-center border border-rose-100">
-                {error}
-            </div>
+          <div className="bg-rose-50 text-rose-600 p-3 rounded-lg text-sm mb-4 text-center border border-rose-100">
+            {error}
+          </div>
         )}
 
         <form onSubmit={handleSubmit} className="space-y-4">
           <div>
             <label className="block text-sm font-medium text-slate-700 mb-1">Full Name</label>
-            <input 
-              type="text" 
+            <input
+              type="text"
               required
               className="w-full px-4 py-2 border border-slate-200 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:outline-none"
               value={name}
@@ -69,8 +80,8 @@ export const Signup: React.FC<{ onSwitch: () => void }> = ({ onSwitch }) => {
           </div>
           <div>
             <label className="block text-sm font-medium text-slate-700 mb-1">Email</label>
-            <input 
-              type="email" 
+            <input
+              type="email"
               required
               className="w-full px-4 py-2 border border-slate-200 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:outline-none"
               value={email}
@@ -80,24 +91,24 @@ export const Signup: React.FC<{ onSwitch: () => void }> = ({ onSwitch }) => {
           <div>
             <label className="block text-sm font-medium text-slate-700 mb-1">Password</label>
             <div className="relative">
-                <input 
-                  type={showPassword ? "text" : "password"}
-                  required
-                  className="w-full px-4 py-2 border border-slate-200 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:outline-none pr-10"
-                  value={password}
-                  onChange={(e) => setPassword(e.target.value)}
-                />
-                <button
-                  type="button"
-                  onClick={() => setShowPassword(!showPassword)}
-                  className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-indigo-600 transition-colors"
-                >
-                  {showPassword ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
-                </button>
+              <input
+                type={showPassword ? "text" : "password"}
+                required
+                className="w-full px-4 py-2 border border-slate-200 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:outline-none pr-10"
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+              />
+              <button
+                type="button"
+                onClick={() => setShowPassword(!showPassword)}
+                className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-indigo-600 transition-colors"
+              >
+                {showPassword ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
+              </button>
             </div>
           </div>
-          <button 
-            type="submit" 
+          <button
+            type="submit"
             disabled={loading}
             className="w-full bg-indigo-600 text-white py-3 rounded-xl font-bold hover:bg-indigo-700 transition-colors disabled:opacity-50 flex justify-center"
           >

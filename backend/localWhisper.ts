@@ -145,3 +145,21 @@ app.listen(port, () => {
     console.log(`🚀 Local Whisper API running at http://localhost:${port}`);
     console.log(`   Endpoint: POST /v1/audio/transcriptions`);
 });
+
+// Debug: Catch any reason for process exit
+process.on('exit', (code) => {
+    console.log(`⚠️ Process exit with code: ${code}`);
+});
+
+process.on('uncaughtException', (err) => {
+    console.error('❌ Uncaught Exception:', err);
+});
+
+process.on('unhandledRejection', (reason, promise) => {
+    console.error('❌ Unhandled Rejection at:', promise, 'reason:', reason);
+});
+
+// Keep-alive: Prevent Node from exiting if event loop is empty
+setInterval(() => {
+    // This keeps the process alive
+}, 1000 * 60 * 60); // Every hour (just to keep event loop active)

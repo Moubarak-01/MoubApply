@@ -12,16 +12,58 @@ export const api = {
     return response.json();
   },
 
+  updateUser: async (userId: string, data: any) => {
+    const response = await fetch(`${API_URL}/user`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ userId, ...data })
+    });
+    if (!response.ok) throw new Error('Failed to update user');
+    return response.json();
+  },
+
+
+  rejectJob: async (userId: string, jobId: string) => {
+    const response = await fetch(`${API_URL}/jobs/${jobId}/reject`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ userId })
+    });
+    if (!response.ok) throw new Error('Failed to reject job');
+    return response.json();
+  },
+
+  createManualJob: async (userId: string, url: string) => {
+    const response = await fetch(`${API_URL}/jobs/manual`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ userId, url })
+    });
+    if (!response.ok) throw new Error('Failed to create manual job');
+    return response.json();
+  },
+
   // Jobs (We need to add this route to backend first, but let's prepare the frontend)
-  getJobs: async () => {
-    const response = await fetch(`${API_URL}/jobs`);
+  // Jobs
+  getJobs: async (userId?: string) => {
+    const url = userId ? `${API_URL}/jobs?userId=${userId}` : `${API_URL}/jobs`;
+    const response = await fetch(url);
     if (!response.ok) throw new Error('Failed to fetch jobs');
     return response.json();
   },
 
   // User
-  getUser: async () => {
-    const response = await fetch(`${API_URL}/user`);
+  // User
+  getUser: async (token?: string) => {
+    if (!token) {
+      // Fallback or error?
+      const response = await fetch(`${API_URL}/user`);
+      if (!response.ok) throw new Error('Failed to fetch user');
+      return response.json();
+    }
+    const response = await fetch(`${API_URL}/auth/me`, {
+      headers: { Authorization: `Bearer ${token}` }
+    });
     if (!response.ok) throw new Error('Failed to fetch user');
     return response.json();
   },
@@ -45,10 +87,10 @@ export const api = {
       method: 'POST',
       body: formData,
     });
-    
+
     if (!response.ok) {
-        const err = await response.json();
-        throw new Error(err.error || 'Failed to upload files');
+      const err = await response.json();
+      throw new Error(err.error || 'Failed to upload files');
     }
     return response.json();
   },
@@ -65,9 +107,9 @@ export const api = {
   // AI Chat
   chatWithAI: async (userId: string, message: string) => {
     const response = await fetch(`${API_URL}/ai/assistant`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ userId, message })
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ userId, message })
     });
     if (!response.ok) throw new Error('AI Chat failed');
     return response.json();
@@ -76,7 +118,7 @@ export const api = {
   // Tailor Resume
   tailorResume: async (appId: string) => {
     const response = await fetch(`${API_URL}/applications/${appId}/tailor`, {
-        method: 'POST'
+      method: 'POST'
     });
     if (!response.ok) throw new Error('Tailoring failed');
     return response.json();
@@ -84,9 +126,9 @@ export const api = {
 
   deleteAccount: async (userId: string) => {
     const response = await fetch(`${API_URL}/auth/delete-account`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ userId })
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ userId })
     });
     if (!response.ok) throw new Error('Deletion failed');
     return response.json();
