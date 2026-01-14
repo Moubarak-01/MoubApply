@@ -115,18 +115,16 @@
 %-----------PROJECTS-----------
 \section{Technical Projects} 
     \resumeSubHeadingListStart
-    
     {{#PROJECTS}}
     \resumeProjectHeading
-        {\textbf{\href{ {{LINK}} }{ {{TITLE}} }} $|$ \emph{ {{TECH_STACK}} }}{ {{DATE}} }
+        {\textbf{\href{{{LINK}}}{{{TITLE}}}} $|$ \emph{{{TECH_STACK}}}}{{{DATE}}}
         \resumeItemListStart
             {{#BULLETS}}
-            \resumeItem{ {{.}} }
+            \resumeItem{{{.}}}
             {{/BULLETS}}
         \resumeItemListEnd
         \vspace{-10pt}
     {{/PROJECTS}}
-          
     \resumeSubHeadingListEnd
     \vspace{-12pt}
 
@@ -135,24 +133,25 @@
     \resumeSubHeadingListStart
         {{#LEADERSHIP}}
         \resumeProjectHeading
-            {\textbf{{ {{ORG_NAME}} }} $|$ \emph{ {{ROLE}} }}{ {{DATES}} }
+            {\textbf{{{ORG_NAME}}} $|$ \emph{{{ROLE}}}}{{{DATES}}}
           \resumeItemListStart
             {{#BULLETS}}
-            \resumeItem{ {{.}} }
+            \resumeItem{{{.}}}
             {{/BULLETS}}
           \resumeItemListEnd
         {{/LEADERSHIP}}
     \resumeSubHeadingListEnd
+    \vspace{-12pt}
 
 %-----------Technical Skills-----------
 \section{Technical Skills}
  \begin{itemize}[leftmargin=0.15in, label={}]
     \small{\item{   
-     \textbf{Languages}{: {{SKILLS_LANGUAGES}} } \\
-     \textbf{Frontend}{: {{SKILLS_FRONTEND}} } \\
-     \textbf{Backend \& System}{: {{SKILLS_BACKEND}} } \\
-     \textbf{AI \& ML}{: {{SKILLS_AI}} } \\
-     \textbf{Tools}{: {{SKILLS_TOOLS}} }
+     \textbf{Languages}{: {{SKILLS_LANGUAGES}}} \\
+     \textbf{Frontend}{: {{SKILLS_FRONTEND}}} \\
+     \textbf{Backend \& System}{: {{SKILLS_BACKEND}}} \\
+     \textbf{AI \& ML}{: {{SKILLS_AI}}} \\
+     \textbf{Tools}{: {{SKILLS_TOOLS}}}
     }}
  \end{itemize}
 
