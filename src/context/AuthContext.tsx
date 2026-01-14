@@ -10,6 +10,7 @@ interface User {
     race: string;
     veteran: string;
     disability: string;
+    hispanicLatino?: string;
   };
   commonReplies?: {
     workAuth: string;
@@ -29,6 +30,8 @@ interface User {
     university: string;
     degree: string;
     gpa: string;
+    gradMonth?: string;
+    gradYear?: string;
   };
   customAnswers?: {
     pronouns: string;
@@ -44,6 +47,30 @@ interface User {
     location?: string;
     minMatchScore?: number;
     autoGenerateEssays?: boolean;
+  };
+  // Employment history for auto-apply
+  employment?: {
+    company: string;
+    title: string;
+    startMonth: string;
+    startYear: string;
+    endMonth: string;
+    endYear: string;
+    isCurrent: boolean;
+  }[];
+  // Additional authorization answers
+  additionalAnswers?: {
+    canContactEmployer: string;
+    canPerformFunctions: string;
+    accommodationNeeds: string;
+    previouslyEmployedHere: string;
+    proximityToOffice: string;
+    certifyTruthful: string;
+  };
+  // Structured experience from resume parsing
+  structuredExperience?: {
+    education?: { institution: string; degree: string; dates: string; gpa?: string; }[];
+    experience?: { company: string; role: string; dates: string; }[];
   };
 }
 

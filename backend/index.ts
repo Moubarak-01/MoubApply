@@ -181,6 +181,26 @@ app.post('/api/telemetry', (req: Request, res: Response) => {
     res.json({ received: true });
 });
 
+// Delete/Cancel Application Endpoint
+app.delete('/api/applications/:id', async (req: Request, res: Response): Promise<any> => {
+    try {
+        const applicationId = req.params.id;
+        const application = await Application.findById(applicationId);
+
+        if (!application) {
+            return res.status(404).json({ error: 'Application not found' });
+        }
+
+        await Application.findByIdAndDelete(applicationId);
+        console.log(`🗑️ [BACKEND] Application ${applicationId} cancelled/deleted`);
+
+        res.json({ success: true, message: 'Application cancelled' });
+    } catch (error: any) {
+        console.error('Error deleting application:', error);
+        res.status(500).json({ error: 'Failed to delete application' });
+    }
+});
+
 // Tailor Resume Route
 app.post('/api/applications/:id/tailor', async (req: Request, res: Response): Promise<any> => {
     try {
@@ -829,7 +849,7 @@ app.post('/api/applications', async (req: Request, res: Response): Promise<any> 
 // Update User Profile Route
 app.put('/api/user', async (req: Request, res: Response): Promise<any> => {
     try {
-        const { userId, demographics, commonReplies, personalDetails, customAnswers, essayAnswers } = req.body;
+        const { userId, demographics, commonReplies, personalDetails, customAnswers, essayAnswers, preferences, additionalAnswers } = req.body;
         console.log(`💾 [TELEMETRY] Profile update request - User: ${userId}`);
         if (!userId) return res.status(400).json({ error: 'userId required' });
 
@@ -839,6 +859,8 @@ app.put('/api/user', async (req: Request, res: Response): Promise<any> => {
         if (personalDetails) update.personalDetails = personalDetails;
         if (customAnswers) update.customAnswers = customAnswers;
         if (essayAnswers) update.essayAnswers = essayAnswers;
+        if (preferences) update.preferences = preferences;
+        if (additionalAnswers) update.additionalAnswers = additionalAnswers;
 
         const user = await User.findByIdAndUpdate(userId, { $set: update }, { new: true });
         console.log(`✅ [TELEMETRY] Profile updated successfully - User: ${userId}`);

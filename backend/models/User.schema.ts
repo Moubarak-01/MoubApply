@@ -65,6 +65,7 @@ export interface IUser extends Document {
     race: string;
     veteran: string;
     disability: string;
+    hispanicLatino: string;  // "Yes" | "No" | "Decline to state"
   };
   commonReplies?: {
     workAuth: string; // "Yes", "No"
@@ -97,6 +98,25 @@ export interface IUser extends Document {
     whyExcited: string;
     howDidYouHear: string;
   };
+  // Employment History for auto-apply forms
+  employment?: {
+    company: string;
+    title: string;
+    startMonth: string;
+    startYear: string;
+    endMonth: string;
+    endYear: string;
+    isCurrent: boolean;
+  }[];
+  // Additional Authorization/Consent Answers
+  additionalAnswers?: {
+    canContactEmployer: string;        // "Yes" | "No"
+    canPerformFunctions: string;       // "Yes" | "Yes, with accommodation" | "No"
+    accommodationNeeds: string;        // Free text
+    previouslyEmployedHere: string;    // "Yes" | "No" (company-specific, default No)
+    proximityToOffice: string;         // "Yes" | "No" | "Open to relocating"
+    certifyTruthful: string;           // "Yes" (always)
+  };
 }
 
 const UserSchema: Schema = new Schema({
@@ -127,7 +147,8 @@ const UserSchema: Schema = new Schema({
     gender: { type: String, default: '' },
     race: { type: String, default: '' },
     veteran: { type: String, default: '' },
-    disability: { type: String, default: '' }
+    disability: { type: String, default: '' },
+    hispanicLatino: { type: String, default: 'No' }
   },
   commonReplies: {
     workAuth: { type: String, default: '' },
@@ -159,6 +180,25 @@ const UserSchema: Schema = new Schema({
   essayAnswers: {
     whyExcited: { type: String, default: '' },
     howDidYouHear: { type: String, default: '' }
+  },
+  // Employment History for auto-apply
+  employment: [{
+    company: { type: String, default: '' },
+    title: { type: String, default: '' },
+    startMonth: { type: String, default: '' },
+    startYear: { type: String, default: '' },
+    endMonth: { type: String, default: '' },
+    endYear: { type: String, default: '' },
+    isCurrent: { type: Boolean, default: false }
+  }],
+  // Additional Authorization/Consent Answers
+  additionalAnswers: {
+    canContactEmployer: { type: String, default: 'Yes' },
+    canPerformFunctions: { type: String, default: 'Yes' },
+    accommodationNeeds: { type: String, default: '' },
+    previouslyEmployedHere: { type: String, default: 'No' },
+    proximityToOffice: { type: String, default: 'Yes' },
+    certifyTruthful: { type: String, default: 'Yes' }
   }
 }, { timestamps: true });
 

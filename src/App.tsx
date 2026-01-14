@@ -50,12 +50,18 @@ function AppContent() {
       phone: '', address: '', city: '', state: '', zip: '', linkedin: '', github: '', portfolio: '',
       university: '', degree: '', gpa: '', gradMonth: '', gradYear: ''
     },
-    demographics: { gender: 'Male', race: 'Black or African American', veteran: 'I am not a protected veteran', disability: 'No, I do not have a disability' },
+    demographics: { gender: 'Male', race: 'Black or African American', veteran: 'I am not a protected veteran', disability: 'No, I do not have a disability', hispanicLatino: 'No' },
     commonReplies: { workAuth: 'Yes', sponsorship: 'No', relocation: 'Yes', formerEmployee: 'No' },
     customAnswers: { pronouns: '', conflictOfInterest: 'No', familyRel: 'No', govOfficial: 'No' },
     essayAnswers: { whyExcited: '', howDidYouHear: '' },
-    preferences: { autoGenerateEssays: false }
+    preferences: { autoGenerateEssays: false },
+    additionalAnswers: { canContactEmployer: 'Yes', canPerformFunctions: 'Yes', accommodationNeeds: '', previouslyEmployedHere: 'No', proximityToOffice: 'Yes', certifyTruthful: 'Yes' }
   });
+
+  // Employment entries state (separate for easier management)
+  const [employmentEntries, setEmploymentEntries] = useState<{
+    company: string; title: string; startMonth: string; startYear: string; endMonth: string; endYear: string; isCurrent: boolean;
+  }[]>([]);
 
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
@@ -177,7 +183,8 @@ function AppContent() {
         commonReplies: smartMerge(prev.commonReplies, user.commonReplies),
         customAnswers: smartMerge(prev.customAnswers, user.customAnswers),
         essayAnswers: smartMerge(prev.essayAnswers, user.essayAnswers),
-        preferences: smartMerge(prev.preferences, user.preferences)
+        preferences: smartMerge(prev.preferences, user.preferences),
+        additionalAnswers: smartMerge(prev.additionalAnswers, user.additionalAnswers)
       }));
     }
   }, [user]);
@@ -291,11 +298,12 @@ function AppContent() {
 
     const emptyUserInfo = {
       personalDetails: { phone: '', address: '', city: '', state: '', zip: '', linkedin: '', github: '', portfolio: '', university: '', degree: '', gpa: '', gradMonth: '', gradYear: '' },
-      demographics: { gender: '', race: '', veteran: '', disability: '' },
+      demographics: { gender: '', race: '', veteran: '', disability: '', hispanicLatino: '' },
       commonReplies: { workAuth: '', sponsorship: '', relocation: '', formerEmployee: '' },
       customAnswers: { pronouns: '', conflictOfInterest: 'No', familyRel: 'No', govOfficial: 'No' },
       essayAnswers: { whyExcited: '', howDidYouHear: '' },
-      preferences: { autoGenerateEssays: false }
+      preferences: { autoGenerateEssays: false },
+      additionalAnswers: { canContactEmployer: 'Yes', canPerformFunctions: 'Yes', accommodationNeeds: '', previouslyEmployedHere: 'No', proximityToOffice: 'Yes', certifyTruthful: 'Yes' }
     };
 
     setProfileFormData(emptyUserInfo);
@@ -726,15 +734,6 @@ function AppContent() {
                     </label>
 
                     <label className="block">
-                      <span className="text-xs font-bold text-slate-500 uppercase">Why do you want to join? (Fallback / Generic "Why Us")</span>
-                      <textarea className="w-full mt-1 p-2 text-sm rounded-lg border dark:bg-slate-800 dark:border-slate-700 h-24 disabled:opacity-50 disabled:bg-slate-100 dark:disabled:bg-slate-900"
-                        placeholder="I admire the mission..."
-                        value={profileFormData.essayAnswers?.whyExcited || ""}
-                        onChange={(e) => updateProfileField('essayAnswers', 'whyExcited', e.target.value)}
-                        disabled={!isEditingProfile}
-                      />
-                    </label>
-                    <label className="block">
                       <span className="text-xs font-bold text-slate-500 uppercase">How did you hear about us?</span>
                       <input type="text" className="w-full mt-1 p-2 text-sm rounded-lg border dark:bg-slate-800 dark:border-slate-700 disabled:opacity-50 disabled:bg-slate-100 dark:disabled:bg-slate-900"
                         placeholder="e.g. LinkedIn, Glassdoor, Referral"
@@ -766,38 +765,41 @@ function AppContent() {
                 </div>
               </div>
             </div>
-          )}
+          )
+          }
 
-          {currentView === 'settings' && (
-            <div className="max-w-xl mx-auto py-10">
-              <div className="bg-white dark:bg-slate-900 p-8 rounded-2xl shadow-sm border border-slate-200 dark:border-slate-800 transition-colors">
-                <h2 className="text-2xl font-bold text-slate-800 dark:text-white mb-6">Account Settings</h2>
+          {
+            currentView === 'settings' && (
+              <div className="max-w-xl mx-auto py-10">
+                <div className="bg-white dark:bg-slate-900 p-8 rounded-2xl shadow-sm border border-slate-200 dark:border-slate-800 transition-colors">
+                  <h2 className="text-2xl font-bold text-slate-800 dark:text-white mb-6">Account Settings</h2>
 
-                <div className="space-y-6">
-                  <div className="p-4 bg-slate-50 dark:bg-slate-800 rounded-xl border border-slate-100 dark:border-slate-700 transition-colors">
-                    <p className="text-xs font-bold text-slate-400 uppercase tracking-widest mb-1">Signed in as</p>
-                    <p className="font-bold text-slate-800 dark:text-white">{user.name}</p>
-                    <p className="text-sm text-slate-500 dark:text-slate-400">{user.email}</p>
-                  </div>
+                  <div className="space-y-6">
+                    <div className="p-4 bg-slate-50 dark:bg-slate-800 rounded-xl border border-slate-100 dark:border-slate-700 transition-colors">
+                      <p className="text-xs font-bold text-slate-400 uppercase tracking-widest mb-1">Signed in as</p>
+                      <p className="font-bold text-slate-800 dark:text-white">{user.name}</p>
+                      <p className="text-sm text-slate-500 dark:text-slate-400">{user.email}</p>
+                    </div>
 
-                  <div className="pt-6 border-t border-slate-100 dark:border-slate-800">
-                    <h3 className="text-sm font-bold text-rose-600 uppercase tracking-widest mb-4">Danger Zone</h3>
-                    <div className="p-6 bg-rose-50 dark:bg-rose-900/20 border border-rose-100 dark:border-rose-900/50 rounded-2xl transition-colors">
-                      <p className="text-sm text-rose-800 dark:text-rose-300 font-medium mb-4">Permanently delete your account and all associated data, including resumes and applications.</p>
-                      <button
-                        onClick={handleDeleteAccount}
-                        className="w-full py-3 bg-rose-600 text-white rounded-xl font-bold hover:bg-rose-700 transition-colors shadow-lg shadow-rose-200 dark:shadow-none flex items-center justify-center gap-2"
-                      >
-                        <Trash2 className="w-5 h-5" />
-                        Delete Account Permanently
-                      </button>
+                    <div className="pt-6 border-t border-slate-100 dark:border-slate-800">
+                      <h3 className="text-sm font-bold text-rose-600 uppercase tracking-widest mb-4">Danger Zone</h3>
+                      <div className="p-6 bg-rose-50 dark:bg-rose-900/20 border border-rose-100 dark:border-rose-900/50 rounded-2xl transition-colors">
+                        <p className="text-sm text-rose-800 dark:text-rose-300 font-medium mb-4">Permanently delete your account and all associated data, including resumes and applications.</p>
+                        <button
+                          onClick={handleDeleteAccount}
+                          className="w-full py-3 bg-rose-600 text-white rounded-xl font-bold hover:bg-rose-700 transition-colors shadow-lg shadow-rose-200 dark:shadow-none flex items-center justify-center gap-2"
+                        >
+                          <Trash2 className="w-5 h-5" />
+                          Delete Account Permanently
+                        </button>
+                      </div>
                     </div>
                   </div>
                 </div>
               </div>
-            </div>
-          )}
-        </div>
+            )
+          }
+        </div >
       </main >
       <AiAssistant ref={assistantRef} userId={user._id} jobs={jobs} applications={applications} />
       <JobDetailModal job={selectedJob} onClose={() => setSelectedJob(null)} />

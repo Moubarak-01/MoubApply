@@ -1,10 +1,103 @@
-import { chromium } from 'playwright';
+import { chromium, Frame, Page } from 'playwright';
 import path from 'path';
 import fs from 'fs';
-import { User } from '../models/User.schema';
+import { User, IUser } from '../models/User.schema';
 import { Job } from '../models/Job.schema';
 import { Application, ApplicationStatus } from '../models/Application.schema';
 import { generateEssay } from './aiMatcher';
+import { matchFieldValue, getEmploymentEntry, getEducationEntry, FormField } from './aiFieldMatcher';
+
+/**
+ * Scrape all visible form fields from a frame
+ */
+async function scrapeFormFields(frame: Frame): Promise<FormField[]> {
+    const fields: FormField[] = [];
+
+    try {
+        // Scrape inputs
+        const inputs = await frame.locator('input:visible').all();
+        for (const input of inputs) {
+            const type = await input.getAttribute('type') || 'text';
+            if (['hidden', 'submit', 'button', 'file'].includes(type)) continue;
+
+            const label = await getFieldLabel(frame, input);
+            fields.push({
+                type: type === 'checkbox' ? 'checkbox' : 'input',
+                label,
+                placeholder: await input.getAttribute('placeholder') || '',
+                name: await input.getAttribute('name') || '',
+                id: await input.getAttribute('id') || '',
+                isRequired: await input.getAttribute('required') !== null
+            });
+        }
+
+        // Scrape selects (dropdowns)
+        const selects = await frame.locator('select:visible').all();
+        for (const select of selects) {
+            const label = await getFieldLabel(frame, select);
+            const options = await select.locator('option').allInnerTexts();
+            fields.push({
+                type: 'select',
+                label,
+                options: options.filter(o => o.trim() !== '' && !o.toLowerCase().includes('select')),
+                name: await select.getAttribute('name') || '',
+                id: await select.getAttribute('id') || '',
+                isRequired: await select.getAttribute('required') !== null
+            });
+        }
+
+        // Scrape textareas
+        const textareas = await frame.locator('textarea:visible').all();
+        for (const textarea of textareas) {
+            const label = await getFieldLabel(frame, textarea);
+            fields.push({
+                type: 'textarea',
+                label,
+                placeholder: await textarea.getAttribute('placeholder') || '',
+                name: await textarea.getAttribute('name') || '',
+                id: await textarea.getAttribute('id') || '',
+                isRequired: await textarea.getAttribute('required') !== null
+            });
+        }
+    } catch (e) {
+        // Ignore frame access errors
+    }
+
+    return fields;
+}
+
+/**
+ * Get the label text for a form field
+ */
+async function getFieldLabel(frame: Frame, element: any): Promise<string> {
+    try {
+        // Try aria-label
+        const ariaLabel = await element.getAttribute('aria-label');
+        if (ariaLabel) return ariaLabel;
+
+        // Try associated label via 'for' attribute
+        const id = await element.getAttribute('id');
+        if (id) {
+            const label = await frame.locator(`label[for="${id}"]`).first();
+            if (await label.count() > 0) {
+                return await label.innerText();
+            }
+        }
+
+        // Try parent label
+        const parentLabel = await element.locator('xpath=ancestor::label').first();
+        if (await parentLabel.count() > 0) {
+            return await parentLabel.innerText();
+        }
+
+        // Try nearby label (previous sibling or wrapper)
+        const name = await element.getAttribute('name') || '';
+        const placeholder = await element.getAttribute('placeholder') || '';
+        return name || placeholder || 'Unknown';
+    } catch (e) {
+        return 'Unknown';
+    }
+}
 
 export const autoApply = async (applicationId: string) => {
     console.log(`Starting auto-apply for application: ${applicationId}`);
@@ -164,6 +257,9 @@ export const autoApply = async (applicationId: string) => {
 
         let formFilledInAnyFrame = false;
 
+        // NEW: Track fields we couldn't match for AI fallback
+        const unmatchedFields: { frame: Frame; field: FormField; element: any }[] = [];
+
         for (const frame of frames) {
             try {
                 // A. Upload Resume First (Often auto-fills other fields)
@@ -284,6 +380,134 @@ export const autoApply = async (applicationId: string) => {
                     }
                 } catch (e) { }
             }
+        }
+
+        // E. AI FALLBACK: Scrape remaining unfilled fields and use AI to match
+        console.log('🤖 [AI_FILL] Starting AI-powered field matching for complex fields...');
+        for (const frame of frames) {
+            try {
+                const scrapedFields = await scrapeFormFields(frame);
+                console.log(`📋 [AI_FILL] Found ${scrapedFields.length} form fields in frame`);
+
+                for (const field of scrapedFields) {
+                    // Skip if likely already filled by hardcoded logic
+                    const fieldId = field.id || field.name || '';
+
+                    try {
+                        // Get the element
+                        let element;
+                        if (field.type === 'select') {
+                            element = fieldId ? frame.locator(`#${fieldId}`).first() : frame.getByLabel(new RegExp(field.label.slice(0, 20), 'i')).first();
+                        } else {
+                            element = fieldId ? frame.locator(`#${fieldId}`).first() : frame.getByLabel(new RegExp(field.label.slice(0, 20), 'i')).first();
+                        }
+
+                        if (await element.count() === 0) continue;
+                        if (!(await element.isVisible())) continue;
+
+                        // Check if already has value
+                        const currentValue = await element.inputValue().catch(() => '');
+                        if (currentValue && currentValue.length > 0) continue; // Already filled
+
+                        // Use AI matcher
+                        const matchResult = await matchFieldValue(field, user);
+
+                        if (matchResult.value && matchResult.value !== '') {
+                            if (field.type === 'select') {
+                                // For dropdowns, try to match the option
+                                const options = await element.locator('option').allInnerTexts();
+                                const valueStr = String(matchResult.value).toLowerCase();
+                                const bestOption = options.find((opt: string) =>
+                                    opt.toLowerCase().includes(valueStr) || valueStr.includes(opt.toLowerCase())
+                                );
+                                if (bestOption) {
+                                    await element.selectOption({ label: bestOption });
+                                    console.log(`🎯 [AI_FILL] Dropdown "${field.label}" → "${bestOption}" (${matchResult.source})`);
+                                }
+                            } else if (field.type === 'checkbox') {
+                                if (matchResult.value === true) {
+                                    await element.check();
+                                    console.log(`☑️ [AI_FILL] Checked "${field.label}" (${matchResult.source})`);
+                                }
+                            } else {
+                                await element.fill(String(matchResult.value));
+                                console.log(`📝 [AI_FILL] Filled "${field.label}" → "${String(matchResult.value).slice(0, 30)}..." (${matchResult.source})`);
+                            }
+                            formFilledInAnyFrame = true;
+                        }
+                    } catch (fieldErr) {
+                        // Individual field errors don't stop the process
+                    }
+                }
+            } catch (frameErr) {
+                // Frame access errors are normal for cross-origin
+            }
+        }
+
+        // F. EMPLOYMENT SECTION: Handle "Add Employment" patterns
+        console.log('💼 [EMPLOYMENT] Checking for employment sections...');
+        for (const frame of frames) {
+            try {
+                // Look for employment-related buttons or sections
+                const addEmploymentBtn = frame.getByText(/Add.*Employment|Add.*Experience|Add.*Another/i);
+                if (await addEmploymentBtn.count() > 0 && await addEmploymentBtn.first().isVisible()) {
+                    // Get user employment entries
+                    let empIndex = 0;
+                    let emp = getEmploymentEntry(user, empIndex);
+
+                    while (emp) {
+                        console.log(`💼 [EMPLOYMENT] Filling entry ${empIndex + 1}: ${emp.company}`);
+
+                        // Fill employment fields (common patterns)
+                        await frame.getByLabel(/Company.*Name|Employer/i).first().fill(emp.company).catch(() => { });
+                        await frame.getByLabel(/Title|Position|Role/i).first().fill(emp.title).catch(() => { });
+                        await frame.getByLabel(/Start.*Month/i).first().selectOption({ label: emp.startMonth }).catch(() => { });
+                        await frame.getByLabel(/Start.*Year/i).first().selectOption({ label: emp.startYear }).catch(() => { });
+                        await frame.getByLabel(/End.*Month/i).first().selectOption({ label: emp.endMonth }).catch(() => { });
+                        await frame.getByLabel(/End.*Year/i).first().selectOption({ label: emp.endYear }).catch(() => { });
+
+                        if (emp.isCurrent) {
+                            await frame.getByLabel(/Current.*Role|Present/i).first().check().catch(() => { });
+                        }
+
+                        empIndex++;
+                        emp = getEmploymentEntry(user, empIndex);
+
+                        // Click "Add Another" if there are more entries
+                        if (emp) {
+                            await addEmploymentBtn.first().click().catch(() => { });
+                            await page.waitForTimeout(1000);
+                        }
+                    }
+                }
+            } catch (e) { }
+        }
+
+        // G. CONSENT CHECKBOXES: Auto-check all required consent boxes
+        console.log('☑️ [CONSENT] Checking consent/agreement boxes...');
+        for (const frame of frames) {
+            try {
+                const consentBoxes = frame.locator('input[type="checkbox"]:visible');
+                const count = await consentBoxes.count();
+
+                for (let i = 0; i < count; i++) {
+                    try {
+                        const checkbox = consentBoxes.nth(i);
+                        const isChecked = await checkbox.isChecked();
+                        if (!isChecked) {
+                            // Get label to identify consent boxes
+                            const id = await checkbox.getAttribute('id') || '';
+                            const label = id ? await frame.locator(`label[for="${id}"]`).first().innerText().catch(() => '') : '';
+
+                            // Check if it looks like a consent/agreement box
+                            if (/agree|consent|certify|acknowledge|confirm|accept|privacy|terms/i.test(label + id)) {
+                                await checkbox.check();
+                                console.log(`☑️ [CONSENT] Checked: ${label.slice(0, 50)}...`);
+                            }
+                        }
+                    } catch (e) { }
+                }
+            } catch (e) { }
         }
 
         // 5. Success / Pause

@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Clock, Loader2, CheckCircle2, AlertCircle, Zap, Wand2, Eye, ExternalLink } from 'lucide-react';
+import { Clock, Loader2, CheckCircle2, AlertCircle, Zap, Wand2, Eye, ExternalLink, X } from 'lucide-react';
 import { clsx } from 'clsx';
 import { api } from '../services/api';
 
@@ -82,6 +82,23 @@ export const Tracker: React.FC<TrackerProps> = ({ userId, onReview, onApplicatio
       alert("Auto apply failed");
     } finally {
       setLoadingId(null);
+    }
+  };
+
+  const handleCancel = async (appId: string, company: string, role: string) => {
+    if (!confirm(`🗑️ Cancel application to ${role} at ${company}?\n\nThis will permanently delete this application.`)) return;
+
+    try {
+      const response = await fetch(`http://localhost:5000/api/applications/${appId}`, { method: 'DELETE' });
+      if (response.ok) {
+        await fetchApplications();
+        console.log(`🗑️ [TRACKER] Application ${appId} cancelled successfully`);
+      } else {
+        alert('Failed to cancel application');
+      }
+    } catch (error) {
+      console.error('Error cancelling application:', error);
+      alert('Failed to cancel application');
     }
   };
 
@@ -175,6 +192,14 @@ export const Tracker: React.FC<TrackerProps> = ({ userId, onReview, onApplicatio
                         >
                           {loadingId === app._id ? <Loader2 className="w-3 h-3 animate-spin" /> : <Zap className="w-3 h-3 fill-current" />}
                           Auto-Apply
+                        </button>
+                        <button
+                          onClick={() => handleCancel(app._id, app.company, app.role)}
+                          className="flex items-center gap-1 bg-red-100 dark:bg-red-900/30 text-red-600 dark:text-red-400 px-3 py-1.5 rounded-lg text-[10px] font-bold hover:bg-red-200 dark:hover:bg-red-900/50 transition-colors"
+                          title="Cancel Application"
+                        >
+                          <X className="w-3 h-3" />
+                          Cancel
                         </button>
                       </>
                     )}
