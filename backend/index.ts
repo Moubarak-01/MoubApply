@@ -322,6 +322,9 @@ app.post('/api/ai/assistant', async (req: Request, res: Response): Promise<any> 
                 );
 
                 response.data.on('data', (chunk: Buffer) => {
+                    if (!streamSuccess) {
+                        console.log(`\x1b[32m✅ 🌟 AI Chat SUCCESS with model: ${modelId} 🌟\x1b[0m`);
+                    }
                     streamSuccess = true;
                     const lines = chunk.toString().split('\n').filter(line => line.trim() !== '');
                     for (const line of lines) {

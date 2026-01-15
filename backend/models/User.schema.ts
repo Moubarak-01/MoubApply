@@ -148,7 +148,7 @@ const UserSchema: Schema = new Schema({
     race: { type: String, default: '' },
     veteran: { type: String, default: '' },
     disability: { type: String, default: '' },
-    hispanicLatino: { type: String, default: 'No' }
+    hispanicLatino: { type: String, default: '' }
   },
   commonReplies: {
     workAuth: { type: String, default: '' },
@@ -173,9 +173,9 @@ const UserSchema: Schema = new Schema({
   },
   customAnswers: {
     pronouns: { type: String, default: '' },
-    conflictOfInterest: { type: String, default: 'No' },
-    familyRel: { type: String, default: 'No' },
-    govOfficial: { type: String, default: 'No' }
+    conflictOfInterest: { type: String, default: '' },
+    familyRel: { type: String, default: '' },
+    govOfficial: { type: String, default: '' }
   },
   essayAnswers: {
     whyExcited: { type: String, default: '' },
@@ -193,12 +193,12 @@ const UserSchema: Schema = new Schema({
   }],
   // Additional Authorization/Consent Answers
   additionalAnswers: {
-    canContactEmployer: { type: String, default: 'Yes' },
-    canPerformFunctions: { type: String, default: 'Yes' },
+    canContactEmployer: { type: String, default: '' },
+    canPerformFunctions: { type: String, default: '' },
     accommodationNeeds: { type: String, default: '' },
-    previouslyEmployedHere: { type: String, default: 'No' },
-    proximityToOffice: { type: String, default: 'Yes' },
-    certifyTruthful: { type: String, default: 'Yes' }
+    previouslyEmployedHere: { type: String, default: '' },
+    proximityToOffice: { type: String, default: '' },
+    certifyTruthful: { type: String, default: '' }
   }
 }, { timestamps: true });
 

@@ -1,11 +1,84 @@
-import { chromium, Frame, Page } from 'playwright';
+import { chromium, Frame, Page, Locator } from 'playwright';
 import path from 'path';
 import fs from 'fs';
 import { User, IUser } from '../models/User.schema';
 import { Job } from '../models/Job.schema';
 import { Application, ApplicationStatus } from '../models/Application.schema';
 import { generateEssay } from './aiMatcher';
-import { matchFieldValue, getEmploymentEntry, getEducationEntry, FormField } from './aiFieldMatcher';
+import { matchFieldValue, getEmploymentEntry, getEducationEntry, FormField, findBestOption } from './aiFieldMatcher';
+
+/**
+ * Handle typeahead/autocomplete fields (like react-select, combobox)
+ * These require clicking, typing, waiting for suggestions, then selecting
+ */
+async function handleTypeahead(frame: Frame, labelRegex: RegExp, value: string): Promise<boolean> {
+    if (!value) return false;
+
+    try {
+        // Find the container by label
+        const container = frame.getByLabel(labelRegex).first();
+        if (await container.count() === 0 || !(await container.isVisible())) return false;
+
+        // Check if it's an actual <select> element (don't use typeahead for these)
+        const tagName = await container.evaluate(el => el.tagName.toLowerCase()).catch(() => '');
+        if (tagName === 'select') return false;
+
+        // Click to open dropdown/focus
+        await container.click();
+        await frame.page().waitForTimeout(300);
+
+        // Type the value to filter options
+        await container.fill(value);
+        await frame.page().waitForTimeout(500);
+
+        // Look for suggestion dropdown items
+        const suggestions = frame.locator('[role="option"], [role="listbox"] > *, .suggestion, .autocomplete-item, [class*="option"], [class*="menu"] [class*="item"]').filter({ hasText: new RegExp(value.split(' ')[0], 'i') });
+
+        if (await suggestions.count() > 0) {
+            await suggestions.first().click();
+            console.log(`🔍 [TYPEAHEAD] Selected "${value}" from suggestions`);
+            return true;
+        }
+
+        // If no suggestions found, try pressing Enter (some fields accept typed value)
+        await container.press('Enter');
+        console.log(`⌨️ [TYPEAHEAD] Typed and submitted "${value}"`);
+        return true;
+    } catch (e) {
+        return false;
+    }
+}
+
+/**
+ * Smart dropdown filler using similarity scoring
+ */
+async function smartSelectOption(frame: Frame, labelRegex: RegExp, targetValue: string): Promise<boolean> {
+    if (!targetValue) return false;
+
+    try {
+        const select = frame.getByLabel(labelRegex).first();
+        if (await select.count() === 0 || !(await select.isVisible())) return false;
+
+        // Get all options
+        const options = await select.locator('option').allInnerTexts();
+        if (options.length === 0) return false;
+
+        // Use similarity scoring to find the best match
+        const best = findBestOption(options, targetValue);
+        if (best && best.score >= 0.5) {
+            await select.selectOption({ label: best.option });
+            console.log(`🎯 [SMART_SELECT] "${best.option}" (score: ${best.score.toFixed(2)}) for "${targetValue}"`);
+            return true;
+        }
+
+        // Fallback: try exact value
+        await select.selectOption({ value: targetValue }).catch(() => { });
+        return false;
+    } catch (e) {
+        return false;
+    }
+}
+
 
 /**
  * Scrape all visible form fields from a frame
@@ -215,25 +288,46 @@ export const autoApply = async (applicationId: string) => {
         // MAPPINGS DEFINITION (Global Scope for this function)
 
         const extendedMappings: [RegExp, string][] = [
-            [/Gender/i, user.demographics?.gender || ""],
-            [/Race|Ethnicity/i, user.demographics?.race || ""],
+            // Demographics (EEO) - Profile values only, no defaults
+            [/\bGender\b/i, user.demographics?.gender || ""],
+            [/\bRace\b|Ethnicity/i, user.demographics?.race || ""],
             [/Veteran/i, user.demographics?.veteran || ""],
-            [/Disability/i, user.demographics?.disability || ""],
-            [/Work.*Authorization|Authorized/i, user.commonReplies?.workAuth || ""],
-            [/Sponsorship/i, user.commonReplies?.sponsorship || ""],
-            [/Relocate|Relocation/i, user.commonReplies?.relocation || ""],
-            [/Former.*Employee|Previous.*Employment/i, user.commonReplies?.formerEmployee || ""],
+            [/\bDisability\b|disabilities/i, user.demographics?.disability || ""],
+            [/Hispanic|Latino/i, user.demographics?.hispanicLatino || ""],
 
-            // Custom Answers
+            // Work Authorization - Profile values only
+            [/Work.*Auth|Authorized.*work|Eligible.*work|Legally.*work/i, user.commonReplies?.workAuth || ""],
+            [/Sponsor|Visa.*sponsor|Require.*sponsor/i, user.commonReplies?.sponsorship || ""],
+            [/Relocat|Willing.*move|Open.*relocat/i, user.commonReplies?.relocation || ""],
+            [/Commut|Proximity|Reside.*near|Based.*in|Live.*near/i, user.additionalAnswers?.proximityToOffice || ""],
+
+            // Employment History Related - Profile values only
+            [/Former.*Employee|Previously.*employ|Worked.*here.*before|Employed.*by.*before|Employed.*by.*past/i, user.commonReplies?.formerEmployee || user.additionalAnswers?.previouslyEmployedHere || ""],
+            [/May.*contact|Contact.*current.*employer|Contact.*employer/i, user.additionalAnswers?.canContactEmployer || ""],
+            [/Perform.*essential.*function|Can.*perform.*function|Able.*perform/i, user.additionalAnswers?.canPerformFunctions || ""],
+            [/Reasonable.*accommodation|Need.*accommodation/i, user.additionalAnswers?.accommodationNeeds || ""],
+            [/Review.*linked.*document|Privacy.*policy|Reviewed.*policy|Candidate.*privacy/i, user.additionalAnswers?.certifyTruthful || ""],
+
+            // Custom Answers - Profile values only
             [/Pronoun/i, user.customAnswers?.pronouns || ""],
-            [/Country/i, "United States"],
-            [/How.*hear/i, user.essayAnswers?.howDidYouHear || ""],
-            [/Why.*excited|Why.*join/i, whyUsEssay],
+            [/Country/i, "United States"], // This one stays as all users are US-based
+            [/How.*hear|Where.*learn|Source|Referral/i, user.essayAnswers?.howDidYouHear || ""],
+            [/Why.*excited|Why.*join|Why.*interest|Motivation/i, whyUsEssay],
 
-            // Conflict / Legal Defaults (These can stay as "No" since they're legal disclaimers)
-            [/Conflict.*Interest/i, user.customAnswers?.conflictOfInterest || "No"],
-            [/Family.*Rel/i, user.customAnswers?.familyRel || "No"],
-            [/Government.*Official/i, user.customAnswers?.govOfficial || "No"],
+            // Conflict / Legal - Profile values only
+            [/Conflict.*Interest/i, user.customAnswers?.conflictOfInterest || ""],
+            [/Family.*Rel/i, user.customAnswers?.familyRel || ""],
+            [/Government.*Official/i, user.customAnswers?.govOfficial || ""],
+
+            // Education - Profile values only
+            [/School|University|Institution|College/i, user.personalDetails?.university || ""],
+            [/\bDegree\b/i, user.personalDetails?.degree || ""],
+            [/Discipline|Major|Field.*Study|Area.*Study/i, user.structuredExperience?.education?.[0]?.coursework || ""],
+
+            // Certify/Signature - Uses name which is always in profile
+            [/Certify|Truthful|Attest|Electronic.*signature/i, user.name ? `${user.name} - ${new Date().toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' })}` : ""],
+
+            // Misc
             [/LGBT/i, ""],
             [/Confidence.*Scale/i, ""]
         ];
@@ -305,32 +399,42 @@ export const autoApply = async (applicationId: string) => {
                     }
                 }
 
-                // C. Handle Dropdowns / Selects (Fuzzy Logic)
-                const fuzzySelect = async (frame: any, labelRegex: RegExp, idealValue: string) => {
+                // C. Handle Dropdowns / Selects using SMART similarity matching
+                const smartFill = async (frame: Frame, labelRegex: RegExp, idealValue: string) => {
                     if (!idealValue) return;
                     try {
-                        const select = frame.getByLabel(labelRegex).first();
-                        if (await select.count() > 0 && await select.isVisible()) {
-                            const options = await select.locator('option').allInnerTexts();
-                            const params = idealValue.toLowerCase();
-                            const bestMatch = options.find((opt: string) =>
-                                opt.toLowerCase().includes(params) || params.includes(opt.toLowerCase())
-                            );
-                            if (bestMatch) {
-                                await select.selectOption({ label: bestMatch });
+                        const element = frame.getByLabel(labelRegex).first();
+                        if (await element.count() === 0 || !(await element.isVisible())) return;
+
+                        // Check if it's a real <select> element
+                        const tagName = await element.evaluate(el => el.tagName.toLowerCase()).catch(() => '');
+
+                        if (tagName === 'select') {
+                            // Standard dropdown - use similarity scoring
+                            const options = await element.locator('option').allInnerTexts();
+                            const best = findBestOption(options, idealValue);
+
+                            if (best && best.score >= 0.5) {
+                                await element.selectOption({ label: best.option });
                                 formFilledInAnyFrame = true;
-                                console.log(`🎯 Fuzzy Match: "${bestMatch}" for "${idealValue}"`);
-                            } else {
-                                await select.selectOption({ value: idealValue }).catch(() => { });
+                                console.log(`🎯 [SMART_FILL] "${best.option}" (${(best.score * 100).toFixed(0)}% match) for /${labelRegex.source}/`);
                             }
+                        } else if (tagName === 'input' || tagName === 'textarea') {
+                            // Text input or textarea - just fill
+                            await element.fill(idealValue);
+                            formFilledInAnyFrame = true;
+                            console.log(`📝 [SMART_FILL] Input filled: "${idealValue.slice(0, 40)}..."`);
+                        } else {
+                            // Could be a custom dropdown (react-select, etc.) - try typeahead
+                            const filled = await handleTypeahead(frame, labelRegex, idealValue);
+                            if (filled) formFilledInAnyFrame = true;
                         }
                     } catch (e) { }
                 };
 
 
-
                 for (const [regex, value] of extendedMappings) {
-                    await fuzzySelect(frame, regex, value);
+                    await smartFill(frame, regex, value);
                 }
 
                 // D. Legacy Fallback (Commented out old exact match logic)

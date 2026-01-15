@@ -29,7 +29,7 @@ export const api = {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ userId })
     });
-    if (!response.ok) throw new Error('Failed to reject job');
+    if (!response.ok) throw new Error('Failed to delete file');
     return response.json();
   },
 

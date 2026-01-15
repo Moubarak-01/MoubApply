@@ -43,19 +43,19 @@ function AppContent() {
   const [reviewApp, setReviewApp] = useState<any | null>(null);
   const [hasLoadedInitialData, setHasLoadedInitialData] = useState(false);
 
-  // Profile form state - defaults must match UI select defaults!
+  // Profile form state - starts EMPTY, filled by resume upload or manual entry
   const [isEditingProfile, setIsEditingProfile] = useState(false); // Profile edit mode
   const [profileFormData, setProfileFormData] = useState({
     personalDetails: {
       phone: '', address: '', city: '', state: '', zip: '', linkedin: '', github: '', portfolio: '',
       university: '', degree: '', gpa: '', gradMonth: '', gradYear: ''
     },
-    demographics: { gender: 'Male', race: 'Black or African American', veteran: 'I am not a protected veteran', disability: 'No, I do not have a disability', hispanicLatino: 'No' },
-    commonReplies: { workAuth: 'Yes', sponsorship: 'No', relocation: 'Yes', formerEmployee: 'No' },
-    customAnswers: { pronouns: '', conflictOfInterest: 'No', familyRel: 'No', govOfficial: 'No' },
+    demographics: { gender: '', race: '', veteran: '', disability: '', hispanicLatino: '' },
+    commonReplies: { workAuth: '', sponsorship: '', relocation: '', formerEmployee: '' },
+    customAnswers: { pronouns: '', conflictOfInterest: '', familyRel: '', govOfficial: '' },
     essayAnswers: { whyExcited: '', howDidYouHear: '' },
     preferences: { autoGenerateEssays: false },
-    additionalAnswers: { canContactEmployer: 'Yes', canPerformFunctions: 'Yes', accommodationNeeds: '', previouslyEmployedHere: 'No', proximityToOffice: 'Yes', certifyTruthful: 'Yes' }
+    additionalAnswers: { canContactEmployer: '', canPerformFunctions: '', accommodationNeeds: '', previouslyEmployedHere: '', proximityToOffice: '', certifyTruthful: '' }
   });
 
   // Employment entries state (separate for easier management)
@@ -141,14 +141,14 @@ function AppContent() {
     if (!common.sponsorship) missing.push('sponsorship');
     if (!common.relocation) missing.push('relocation');
     if (!common.formerEmployee) missing.push('formerEmployee');
-    if (!essay.whyExcited) missing.push('whyExcited');
+    // whyExcited is now optional/auto-generated
     if (!essay.howDidYouHear) missing.push('howDidYouHear');
 
     if (missing.length > 0) {
       console.warn(`🚨 [PROFILE_CHECK] Missing fields:`, missing);
     }
 
-    return missing.length === 0;
+    return missing;
   };
 
   useEffect(() => {
@@ -194,12 +194,12 @@ function AppContent() {
       console.log(`👉 [TELEMETRY] User ${user._id} swiped RIGHT on job: ${job.title} at ${job.company}`);
       fetch('http://localhost:5000/api/telemetry', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ event: 'SWIPE_RIGHT', userId: user._id, data: { title: job.title, company: job.company, jobId: job._id } }) }).catch(() => { });
 
-      if (!isProfileComplete()) {
+      const missing = isProfileComplete();
+      if (missing.length > 0) {
         console.warn(`⚠️ [TELEMETRY] Profile incomplete! Blocking application.`);
-        fetch('http://localhost:5000/api/telemetry', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ event: 'PROFILE_INCOMPLETE', userId: user._id, data: {} }) }).catch(() => { });
-        alert('⚠️ Please complete your profile in the Profile tab before applying to jobs!');
-        setCurrentView('profile');
-        return;
+        fetch('http://localhost:5000/api/telemetry', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ event: 'PROFILE_INCOMPLETE', userId: user._id, data: { missing } }) }).catch(() => { });
+        alert(`⚠️ Please complete your profile! Missing: ${missing.join(', ')}`);
+        return; // BLOCK SWIPE
       }
 
       try {
@@ -292,6 +292,8 @@ function AppContent() {
     }
   };
 
+
+
   const handleClearProfile = async () => {
     if (!user || !token) return;
     if (!confirm("⚠️ Are you sure you want to clear all profile data? This will erase your auto-filled answers.")) return;
@@ -300,15 +302,15 @@ function AppContent() {
       personalDetails: { phone: '', address: '', city: '', state: '', zip: '', linkedin: '', github: '', portfolio: '', university: '', degree: '', gpa: '', gradMonth: '', gradYear: '' },
       demographics: { gender: '', race: '', veteran: '', disability: '', hispanicLatino: '' },
       commonReplies: { workAuth: '', sponsorship: '', relocation: '', formerEmployee: '' },
-      customAnswers: { pronouns: '', conflictOfInterest: 'No', familyRel: 'No', govOfficial: 'No' },
+      customAnswers: { pronouns: '', conflictOfInterest: '', familyRel: '', govOfficial: '' },
       essayAnswers: { whyExcited: '', howDidYouHear: '' },
       preferences: { autoGenerateEssays: false },
-      additionalAnswers: { canContactEmployer: 'Yes', canPerformFunctions: 'Yes', accommodationNeeds: '', previouslyEmployedHere: 'No', proximityToOffice: 'Yes', certifyTruthful: 'Yes' }
+      additionalAnswers: { canContactEmployer: '', canPerformFunctions: '', accommodationNeeds: '', previouslyEmployedHere: '', proximityToOffice: '', certifyTruthful: '' }
     };
 
     setProfileFormData(emptyUserInfo);
 
-    setIsEditingProfile(true); // Switch to edit mode to see changes? Or save immediately.
+    setIsEditingProfile(true); // Switch to edit mode to see changes
     try {
       await api.updateUser(user._id, emptyUserInfo);
       const updated = await api.getUser(token);
@@ -621,44 +623,44 @@ function AppContent() {
                         <span className="text-sm font-medium text-slate-600 dark:text-slate-400">Gender</span>
                         <select
                           className="w-full mt-1 p-2 rounded-lg border dark:bg-slate-800 dark:border-slate-700 disabled:opacity-50"
-                          value={profileFormData.demographics?.gender || "Male"}
+                          value={profileFormData.demographics?.gender || ""}
                           onChange={(e) => updateProfileField('demographics', 'gender', e.target.value)}
                           disabled={!isEditingProfile}
                         >
-                          <option>Male</option><option>Female</option><option>Non-binary</option><option>Decline to Identify</option>
+                          <option value="">Select...</option><option>Male</option><option>Female</option><option>Non-binary</option><option>Decline to Identify</option>
                         </select>
                       </label>
                       <label className="block">
                         <span className="text-sm font-medium text-slate-600 dark:text-slate-400">Race</span>
                         <select
                           className="w-full mt-1 p-2 rounded-lg border dark:bg-slate-800 dark:border-slate-700 disabled:opacity-50"
-                          value={profileFormData.demographics?.race || "Black or African American"}
+                          value={profileFormData.demographics?.race || ""}
                           onChange={(e) => updateProfileField('demographics', 'race', e.target.value)}
                           disabled={!isEditingProfile}
                         >
-                          <option>Black or African American</option><option>White</option><option>Asian</option><option>Hispanic/Latino</option>
+                          <option value="">Select...</option><option>Black or African American</option><option>White</option><option>Asian</option><option>Hispanic/Latino</option><option>American Indian or Alaska Native</option><option>Native Hawaiian or Pacific Islander</option><option>Two or More Races</option><option>Decline to Identify</option>
                         </select>
                       </label>
                       <label className="block">
                         <span className="text-sm font-medium text-slate-600 dark:text-slate-400">Veteran Status</span>
                         <select
                           className="w-full mt-1 p-2 rounded-lg border dark:bg-slate-800 dark:border-slate-700 disabled:opacity-50"
-                          value={profileFormData.demographics?.veteran || "I am not a protected veteran"}
+                          value={profileFormData.demographics?.veteran || ""}
                           onChange={(e) => updateProfileField('demographics', 'veteran', e.target.value)}
                           disabled={!isEditingProfile}
                         >
-                          <option>I am not a protected veteran</option><option>I am a protected veteran</option><option>Decline to Identify</option>
+                          <option value="">Select...</option><option>I am not a protected veteran</option><option>I am a protected veteran</option><option>Decline to Identify</option>
                         </select>
                       </label>
                       <label className="block">
                         <span className="text-sm font-medium text-slate-600 dark:text-slate-400">Disability</span>
                         <select
                           className="w-full mt-1 p-2 rounded-lg border dark:bg-slate-800 dark:border-slate-700 disabled:opacity-50"
-                          value={profileFormData.demographics?.disability || "No, I do not have a disability"}
+                          value={profileFormData.demographics?.disability || ""}
                           onChange={(e) => updateProfileField('demographics', 'disability', e.target.value)}
                           disabled={!isEditingProfile}
                         >
-                          <option>No, I do not have a disability</option><option>Yes, I have a disability</option><option>Decline to Identify</option>
+                          <option value="">Select...</option><option>No, I do not have a disability</option><option>Yes, I have a disability</option><option>Decline to Identify</option>
                         </select>
                       </label>
                     </div>
@@ -670,47 +672,118 @@ function AppContent() {
                         <span className="text-sm font-medium text-slate-600 dark:text-slate-400">Work Authorization?</span>
                         <select
                           className="w-full mt-1 p-2 rounded-lg border dark:bg-slate-800 dark:border-slate-700 disabled:opacity-50"
-                          value={profileFormData.commonReplies?.workAuth || "Yes"}
+                          value={profileFormData.commonReplies?.workAuth || ""}
                           onChange={(e) => updateProfileField('commonReplies', 'workAuth', e.target.value)}
                           disabled={!isEditingProfile}
                         >
-                          <option>Yes</option><option>No</option>
+                          <option value="">Select...</option><option>Yes</option><option>No</option>
                         </select>
                       </label>
                       <label className="block">
                         <span className="text-sm font-medium text-slate-600 dark:text-slate-400">Require Sponsorship?</span>
                         <select
                           className="w-full mt-1 p-2 rounded-lg border dark:bg-slate-800 dark:border-slate-700 disabled:opacity-50"
-                          value={profileFormData.commonReplies?.sponsorship || "No"}
+                          value={profileFormData.commonReplies?.sponsorship || ""}
                           onChange={(e) => updateProfileField('commonReplies', 'sponsorship', e.target.value)}
                           disabled={!isEditingProfile}
                         >
-                          <option>No</option><option>Yes</option>
+                          <option value="">Select...</option><option>No</option><option>Yes</option>
                         </select>
                       </label>
                       <label className="block">
                         <span className="text-sm font-medium text-slate-600 dark:text-slate-400">Open to Relocation?</span>
                         <select
                           className="w-full mt-1 p-2 rounded-lg border dark:bg-slate-800 dark:border-slate-700 disabled:opacity-50"
-                          value={profileFormData.commonReplies?.relocation || "Yes"}
+                          value={profileFormData.commonReplies?.relocation || ""}
                           onChange={(e) => updateProfileField('commonReplies', 'relocation', e.target.value)}
                           disabled={!isEditingProfile}
                         >
-                          <option>Yes</option><option>No</option>
+                          <option value="">Select...</option><option>Yes</option><option>No</option>
                         </select>
                       </label>
                       <label className="block">
                         <span className="text-sm font-medium text-slate-600 dark:text-slate-400">Former Employee?</span>
                         <select
                           className="w-full mt-1 p-2 rounded-lg border dark:bg-slate-800 dark:border-slate-700 disabled:opacity-50"
-                          value={profileFormData.commonReplies?.formerEmployee || "No"}
+                          value={profileFormData.commonReplies?.formerEmployee || ""}
                           onChange={(e) => updateProfileField('commonReplies', 'formerEmployee', e.target.value)}
                           disabled={!isEditingProfile}
                         >
-                          <option>No</option><option>Yes</option>
+                          <option value="">Select...</option><option>No</option><option>Yes</option>
                         </select>
                       </label>
                     </div>
+                  </div>
+                </div>
+
+                {/* Additional Application Questions */}
+                <div className="mt-8 pt-8 border-t border-slate-200 dark:border-slate-800">
+                  <h4 className="font-bold text-slate-700 dark:text-slate-300 border-b pb-2 border-slate-200 dark:border-slate-700 mb-4">📋 Additional Questions</h4>
+                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                    <label className="block">
+                      <span className="text-sm font-medium text-slate-600 dark:text-slate-400">May we contact your current employer?</span>
+                      <select
+                        className="w-full mt-1 p-2 rounded-lg border dark:bg-slate-800 dark:border-slate-700 disabled:opacity-50"
+                        value={profileFormData.additionalAnswers?.canContactEmployer || ""}
+                        onChange={(e) => updateProfileField('additionalAnswers', 'canContactEmployer', e.target.value)}
+                        disabled={!isEditingProfile}
+                      >
+                        <option value="">Select...</option><option>Yes</option><option>No</option>
+                      </select>
+                    </label>
+                    <label className="block">
+                      <span className="text-sm font-medium text-slate-600 dark:text-slate-400">Can you perform essential job functions?</span>
+                      <select
+                        className="w-full mt-1 p-2 rounded-lg border dark:bg-slate-800 dark:border-slate-700 disabled:opacity-50"
+                        value={profileFormData.additionalAnswers?.canPerformFunctions || ""}
+                        onChange={(e) => updateProfileField('additionalAnswers', 'canPerformFunctions', e.target.value)}
+                        disabled={!isEditingProfile}
+                      >
+                        <option value="">Select...</option><option>Yes</option><option>No</option>
+                      </select>
+                    </label>
+                    <label className="block">
+                      <span className="text-sm font-medium text-slate-600 dark:text-slate-400">Live near / can commute to office?</span>
+                      <select
+                        className="w-full mt-1 p-2 rounded-lg border dark:bg-slate-800 dark:border-slate-700 disabled:opacity-50"
+                        value={profileFormData.additionalAnswers?.proximityToOffice || ""}
+                        onChange={(e) => updateProfileField('additionalAnswers', 'proximityToOffice', e.target.value)}
+                        disabled={!isEditingProfile}
+                      >
+                        <option value="">Select...</option><option>Yes</option><option>No</option>
+                      </select>
+                    </label>
+                    <label className="block">
+                      <span className="text-sm font-medium text-slate-600 dark:text-slate-400">Agree to certify truthfulness?</span>
+                      <select
+                        className="w-full mt-1 p-2 rounded-lg border dark:bg-slate-800 dark:border-slate-700 disabled:opacity-50"
+                        value={profileFormData.additionalAnswers?.certifyTruthful || ""}
+                        onChange={(e) => updateProfileField('additionalAnswers', 'certifyTruthful', e.target.value)}
+                        disabled={!isEditingProfile}
+                      >
+                        <option value="">Select...</option><option>Yes</option><option>No</option>
+                      </select>
+                    </label>
+                    <label className="block">
+                      <span className="text-sm font-medium text-slate-600 dark:text-slate-400">Hispanic/Latino?</span>
+                      <select
+                        className="w-full mt-1 p-2 rounded-lg border dark:bg-slate-800 dark:border-slate-700 disabled:opacity-50"
+                        value={profileFormData.demographics?.hispanicLatino || ""}
+                        onChange={(e) => updateProfileField('demographics', 'hispanicLatino', e.target.value)}
+                        disabled={!isEditingProfile}
+                      >
+                        <option value="">Select...</option><option>No</option><option>Yes</option>
+                      </select>
+                    </label>
+                    <label className="block md:col-span-2 lg:col-span-1">
+                      <span className="text-sm font-medium text-slate-600 dark:text-slate-400">Accommodation needs (if any)</span>
+                      <input type="text" className="w-full mt-1 p-2 text-sm rounded-lg border dark:bg-slate-800 dark:border-slate-700 disabled:opacity-50"
+                        placeholder="Leave blank if none"
+                        value={profileFormData.additionalAnswers?.accommodationNeeds || ""}
+                        onChange={(e) => updateProfileField('additionalAnswers', 'accommodationNeeds', e.target.value)}
+                        disabled={!isEditingProfile}
+                      />
+                    </label>
                   </div>
                 </div>
 
@@ -735,30 +808,48 @@ function AppContent() {
 
                     <label className="block">
                       <span className="text-xs font-bold text-slate-500 uppercase">How did you hear about us?</span>
-                      <input type="text" className="w-full mt-1 p-2 text-sm rounded-lg border dark:bg-slate-800 dark:border-slate-700 disabled:opacity-50 disabled:bg-slate-100 dark:disabled:bg-slate-900"
-                        placeholder="e.g. LinkedIn, Glassdoor, Referral"
-                        value={profileFormData.essayAnswers?.howDidYouHear || ""}
-                        onChange={(e) => updateProfileField('essayAnswers', 'howDidYouHear', e.target.value)}
-                        disabled={!isEditingProfile}
-                      />
+                      <div className="space-y-2">
+                        <select
+                          className="w-full mt-1 p-2 rounded-lg border dark:bg-slate-800 dark:border-slate-700 disabled:opacity-50"
+                          value={["LinkedIn", "Glassdoor", "Indeed", "Friend/Colleague", "Social Media", "Twitter/X"].includes(profileFormData.essayAnswers?.howDidYouHear || "") ? profileFormData.essayAnswers.howDidYouHear : (profileFormData.essayAnswers?.howDidYouHear ? "Other" : "")}
+                          onChange={(e) => updateProfileField('essayAnswers', 'howDidYouHear', e.target.value)}
+                          disabled={!isEditingProfile}
+                        >
+                          <option value="">Select...</option>
+                          <option>LinkedIn</option>
+                          <option>Glassdoor</option>
+                          <option>Indeed</option>
+                          <option>Friend/Colleague</option>
+                          <option>Social Media</option>
+                          <option>Twitter/X</option>
+                          <option value="Other">Other</option>
+                        </select>
+                        {(!["LinkedIn", "Glassdoor", "Indeed", "Friend/Colleague", "Social Media", "Twitter/X", ""].includes(profileFormData.essayAnswers?.howDidYouHear || "") || profileFormData.essayAnswers?.howDidYouHear === "Other") && (
+                          <input
+                            type="text"
+                            className="w-full p-2 text-sm rounded-lg border dark:bg-slate-800 dark:border-slate-700 focus:ring-2 focus:ring-indigo-500 animate-in fade-in slide-in-from-top-1"
+                            placeholder="Please specify..."
+                            value={profileFormData.essayAnswers?.howDidYouHear === "Other" ? "" : profileFormData.essayAnswers?.howDidYouHear}
+                            onChange={(e) => updateProfileField('essayAnswers', 'howDidYouHear', e.target.value)}
+                          />
+                        )}
+                      </div>
                     </label>
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                       <label className="block">
                         <span className="text-xs font-bold text-slate-500 uppercase">Preferred Pronouns</span>
-                        <input type="text" className="w-full mt-1 p-2 text-sm rounded-lg border dark:bg-slate-800 dark:border-slate-700 disabled:opacity-50 disabled:bg-slate-100 dark:disabled:bg-slate-900"
-                          placeholder="e.g. He/Him, She/Her, They/Them"
+                        <select
+                          className="w-full mt-1 p-2 rounded-lg border dark:bg-slate-800 dark:border-slate-700 disabled:opacity-50"
                           value={profileFormData.customAnswers?.pronouns || ""}
                           onChange={(e) => updateProfileField('customAnswers', 'pronouns', e.target.value)}
                           disabled={!isEditingProfile}
-                        />
-                      </label>
-                      <label className="block">
-                        <span className="text-xs font-bold text-slate-500 uppercase">Confidence Scale (1-5)</span>
-                        <input type="text" className="w-full mt-1 p-2 text-sm rounded-lg border dark:bg-slate-800 dark:border-slate-700 disabled:opacity-50 disabled:bg-slate-100 dark:disabled:bg-slate-900"
-                          placeholder="Very Confident"
-                          defaultValue={"Very Confident"}
-                          disabled
-                        />
+                        >
+                          <option value="">Select...</option>
+                          <option>He/Him</option>
+                          <option>She/Her</option>
+                          <option>They/Them</option>
+                          <option>Decline to Identify</option>
+                        </select>
                       </label>
                     </div>
                   </div>
