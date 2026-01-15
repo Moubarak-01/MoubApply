@@ -35,7 +35,7 @@ export const Tracker: React.FC<TrackerProps> = ({ userId, onReview, onApplicatio
 
   const fetchApplications = async () => {
     try {
-      const response = await fetch(`http://localhost:5000/api/applications?userId=${userId}`);
+      const response = await fetch(`http://localhost:5001/api/applications?userId=${userId}`);
       const data = await response.json();
       const formattedApps = data
         .filter((app: any) => app.jobId) // Filter out apps where job was deleted
@@ -76,7 +76,7 @@ export const Tracker: React.FC<TrackerProps> = ({ userId, onReview, onApplicatio
   const handleAutoApply = async (appId: string) => {
     setLoadingId(appId);
     try {
-      await fetch(`http://localhost:5000/api/applications/${appId}/apply`, { method: 'POST' });
+      await fetch(`http://localhost:5001/api/applications/${appId}/apply`, { method: 'POST' });
       await fetchApplications();
     } catch (error) {
       alert("Auto apply failed");
@@ -89,7 +89,7 @@ export const Tracker: React.FC<TrackerProps> = ({ userId, onReview, onApplicatio
     if (!confirm(`🗑️ Cancel application to ${role} at ${company}?\n\nThis will permanently delete this application.`)) return;
 
     try {
-      const response = await fetch(`http://localhost:5000/api/applications/${appId}`, { method: 'DELETE' });
+      const response = await fetch(`http://localhost:5001/api/applications/${appId}`, { method: 'DELETE' });
       if (response.ok) {
         await fetchApplications();
         console.log(`🗑️ [TRACKER] Application ${appId} cancelled successfully`);

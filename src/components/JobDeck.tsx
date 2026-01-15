@@ -24,7 +24,7 @@ export const JobDeck: React.FC<JobDeckProps> = ({ initialJobs, userGradYear, onJ
   const handleFetchRealJobs = async () => {
     setIsIngesting(true);
     try {
-      const res = await fetch('http://localhost:5000/api/jobs/ingest', {
+      const res = await fetch('http://localhost:5001/api/jobs/ingest', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ query: searchQuery, range: 'week' })

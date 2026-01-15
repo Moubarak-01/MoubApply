@@ -5,7 +5,6 @@ import { X, Sparkles, AlertTriangle, Trophy, Zap, Loader2, BrainCircuit } from '
 import { ReviewModal } from './ReviewModal';
 import { type Job } from './JobCard';
 import { useAuth } from '../context/AuthContext';
-import { api } from '../services/api';
 
 interface JobDetailModalProps {
     job: Job | null;
@@ -35,7 +34,7 @@ export const JobDetailModal: React.FC<JobDetailModalProps> = ({ job, onClose }) 
         if (!localJob || !user) return;
         setAnalyzing(true);
         try {
-            const res = await fetch(`http://localhost:5000/api/jobs/${localJob._id}/match`, {
+            const res = await fetch(`http://localhost:5001/api/jobs/${localJob._id}/match`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ userId: user._id })
@@ -55,7 +54,7 @@ export const JobDetailModal: React.FC<JobDetailModalProps> = ({ job, onClose }) 
         setApplying(true);
         try {
             // 1. Create Application (Queue)
-            const appRes = await fetch('http://localhost:5000/api/applications', {
+            const appRes = await fetch('http://localhost:5001/api/applications', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ userId: user._id, jobId: localJob._id })
@@ -64,11 +63,11 @@ export const JobDetailModal: React.FC<JobDetailModalProps> = ({ job, onClose }) 
             const appId = appData._id;
 
             // 2. Tailor Resume (Generates PDF + CL) - Wait for review!
-            const tailorRes = await fetch(`http://localhost:5000/api/applications/${appId}/tailor`, { method: 'POST' });
+            const tailorRes = await fetch(`http://localhost:5001/api/applications/${appId}/tailor`, { method: 'POST' });
             if (!tailorRes.ok) throw new Error("Tailoring failed");
 
             // Fetch updated application to show in review
-            const updatedAppRes = await fetch(`http://localhost:5000/api/applications/${appId}`);
+            const updatedAppRes = await fetch(`http://localhost:5001/api/applications/${appId}`);
             const updatedApp = await updatedAppRes.json();
 
             // Open Review Modal
@@ -86,7 +85,7 @@ export const JobDetailModal: React.FC<JobDetailModalProps> = ({ job, onClose }) 
         try {
             console.log("Approving application:", appId);
             // 3. Trigger Auto-Apply (Background/Playwright)
-            await fetch(`http://localhost:5000/api/applications/${appId}/apply`, { method: 'POST' });
+            await fetch(`http://localhost:5001/api/applications/${appId}/apply`, { method: 'POST' });
             alert("Application started in background browser! Please watch the browser window to confirm submission.");
             onClose();
             setReviewApp(null);
@@ -99,7 +98,7 @@ export const JobDetailModal: React.FC<JobDetailModalProps> = ({ job, onClose }) 
         if (reviewApp?._id) {
             try {
                 // Clean up generated files on backend
-                await fetch(`http://localhost:5000/api/applications/${reviewApp._id}/cancel`, { method: 'DELETE' });
+                await fetch(`http://localhost:5001/api/applications/${reviewApp._id}/cancel`, { method: 'DELETE' });
                 console.log("Application canceled and files cleaned up.");
             } catch (e) {
                 console.error("Cancel cleanup failed:", e);

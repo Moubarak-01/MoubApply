@@ -28,11 +28,13 @@ import { signup, login, getMe, deleteAccount } from './services/auth';
 import { tailorResume } from './services/resumeTailor';
 import { parseResumeToJSON } from './services/resumeParser';
 import { transcribeBuffer } from './services/audioTranscriber';
+import { configureSecurity, authLimiter } from './middleware/security';
+import { validate, signupSchema, loginSchema, ingestSchema } from './middleware/validate';
 
 dotenv.config();
 
 const app = express();
-const PORT = process.env.PORT || 5000;
+const PORT = process.env.PORT || 5001; // Changed to 5001 to bypass zombie process on 5000
 
 // Startup telemetry banner
 console.log(`
@@ -44,6 +46,7 @@ console.log(`
 `);
 
 app.use(cors());
+configureSecurity(app); // Apply Helmet, Rate Limiting, HPP, Sanitization
 app.use(express.json());
 app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
 app.use('/generated_pdfs', express.static(path.join(__dirname, 'generated_pdfs')));
@@ -54,20 +57,20 @@ app.use((req, res, next) => {
     const requestId = Math.random().toString(36).substring(7); // Simple ID
     const timestamp = new Date().toISOString();
 
-    console.group(`[SYSTEM] Request ${requestId} | ${req.method} ${req.url} | ${timestamp}`);
+    console.log(`\n📨 [REQUEST ${requestId}] ${req.method} ${req.url} | ${timestamp}`);
 
     if (req.method === 'POST' || req.method === 'PUT') {
         const sanitizedBody = { ...req.body };
         // Redact sensitive fields if any (e.g. passwords, though typically in Auth header)
         if (sanitizedBody.password) sanitizedBody.password = '***';
-        console.log(`[SYSTEM] Body Payload:`, JSON.stringify(sanitizedBody).slice(0, 500) + (JSON.stringify(sanitizedBody).length > 500 ? '...' : ''));
+        console.log(`   📦 Body:`, JSON.stringify(sanitizedBody).slice(0, 500) + (JSON.stringify(sanitizedBody).length > 500 ? '...' : ''));
     }
 
     // Capture response time
     res.on('finish', () => {
         const duration = Date.now() - start;
-        console.log(`[SYSTEM] Response ${requestId}: Status ${res.statusCode} (${duration}ms)`);
-        console.groupEnd();
+        const statusEmoji = res.statusCode < 400 ? '✅' : '❌';
+        console.log(`${statusEmoji} [RESPONSE ${requestId}] Status ${res.statusCode} (${duration}ms)\n`);
     });
 
     next();
@@ -147,8 +150,8 @@ mongoose.connect(mongoUri)
 // --- API Routes ---
 
 // Auth Routes
-app.post('/api/auth/signup', signup);
-app.post('/api/auth/login', login);
+app.post('/api/auth/signup', validate(signupSchema), signup);
+app.post('/api/auth/login', authLimiter, validate(loginSchema), login);
 app.get('/api/auth/me', getMe);
 app.post('/api/auth/delete-account', deleteAccount);
 
@@ -502,7 +505,7 @@ app.delete('/api/jobs', async (req: Request, res: Response): Promise<any> => {
 let isIngesting = false;
 
 // Ingest Jobs Route
-app.post('/api/jobs/ingest', async (req: Request, res: Response): Promise<any> => {
+app.post('/api/jobs/ingest', validate(ingestSchema), async (req: Request, res: Response): Promise<any> => {
     try {
         const { clearFirst, userId, query } = req.body;
         console.log(`🔍 [TELEMETRY] Job ing ingest initiated - User: ${userId}, Query: "${query}", Clear first: ${clearFirst}`);
@@ -745,15 +748,49 @@ app.get('/api/jobs', async (req: Request, res: Response): Promise<any> => {
                 // 2. Get IDs of jobs user has rejected
                 const rejectedJobIds = user.rejectedJobs || [];
 
-                // 3. Filter query to exclude both
+                // 3. Filter query to exclude applied/rejected AND only show 50%+ matches
                 query = {
-                    _id: { $nin: [...appliedJobIds, ...rejectedJobIds] }
+                    $and: [
+                        { _id: { $nin: [...appliedJobIds, ...rejectedJobIds] } },
+                        { matchScore: { $gte: 50 } }
+                    ]
                 };
             }
         }
 
-        const jobs = await Job.find(query).sort({ createdAt: -1 });
-        console.log(`✅ [TELEMETRY] Fetched ${jobs.length} jobs for user ${userId || 'anonymous'}.`);
+        // Use aggregation to prioritize: USA-based Internships first
+        const jobs = await Job.aggregate([
+            { $match: query },
+            {
+                $addFields: {
+                    // Combine tags into string for matching
+                    tagsString: { $reduce: { input: "$tags", initialValue: "", in: { $concat: ["$$value", " ", "$$this"] } } }
+                }
+            },
+            {
+                $addFields: {
+                    isInternship: { $cond: { if: { $regexMatch: { input: "$tagsString", regex: /Intern/i } }, then: true, else: false } },
+                    isUSA: { $cond: { if: { $regexMatch: { input: "$tagsString", regex: /USA|United States|Remote|US,|, US|US$/i } }, then: true, else: false } }
+                }
+            },
+            {
+                $addFields: {
+                    // Priority: USA + Internship = 2, Internship OR USA = 1, Neither = 0
+                    priority: {
+                        $switch: {
+                            branches: [
+                                { case: { $and: ["$isInternship", "$isUSA"] }, then: 2 },  // USA Internship = TOP
+                                { case: { $or: ["$isInternship", "$isUSA"] }, then: 1 }   // Either one
+                            ],
+                            default: 0
+                        }
+                    }
+                }
+            },
+            { $sort: { priority: -1, matchScore: -1, createdAt: -1 } }, // USA Internships first
+            { $project: { tagsString: 0, isInternship: 0, isUSA: 0, priority: 0 } } // Clean up
+        ]);
+        console.log(`✅ [TELEMETRY] Fetched ${jobs.length} jobs (USA Internships prioritized) for user ${userId || 'anonymous'}.`);
         res.json(jobs);
     } catch (error) {
         console.error('Error fetching jobs:', error);
@@ -876,6 +913,29 @@ app.put('/api/user', async (req: Request, res: Response): Promise<any> => {
 
 // Auth endpoints
 app.get('/api/auth/me', getMe);
+
+// --- TELEMETRY ENDPOINT ---
+app.post('/api/telemetry', (req: Request, res: Response) => {
+    const { event, userId, data } = req.body;
+
+    let emoji = '📡';
+    switch (event) {
+        case 'SWIPE_RIGHT': emoji = '👉'; break;
+        case 'SWIPE_LEFT': emoji = '👈'; break;
+        case 'JOB_INGEST': emoji = '🔍'; break;
+        case 'RESUME_UPLOAD': emoji = '📄'; break;
+        case 'PROFILE_UPDATE': emoji = '💾'; break;
+        case 'AUTO_APPLY': emoji = '🚀'; break;
+        case 'ERROR': emoji = '❌'; break;
+        case 'AI_MATCH': emoji = '🤖'; break;
+    }
+
+    // Log to console immediately
+    console.log(`${emoji} [TELEMETRY] ${event} | User: ${userId || 'Anon'} | ${JSON.stringify(data || {})}`);
+
+    // We could save this to DB later if needed, but for now just log it
+    res.status(200).send({ status: 'ok' });
+});
 
 app.listen(PORT, () => {
     console.log(`Server is running on port ${PORT}`);

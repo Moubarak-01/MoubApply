@@ -181,7 +181,7 @@ export const AiAssistant = forwardRef<AiAssistantRef, AiAssistantProps>(({ userI
     isUserAtBottomRef.current = true;
 
     try {
-      const response = await fetch('http://localhost:5000/api/ai/assistant', {
+      const response = await fetch('http://localhost:5001/api/ai/assistant', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -353,7 +353,7 @@ export const AiAssistant = forwardRef<AiAssistantRef, AiAssistantProps>(({ userI
       const formData = new FormData();
       formData.append('audio', audioBlob, 'recording.webm');
 
-      const response = await fetch('http://localhost:5000/api/ai/transcribe', {
+      const response = await fetch('http://localhost:5001/api/ai/transcribe', {
         method: 'POST',
         body: formData
       });

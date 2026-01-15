@@ -90,13 +90,6 @@ export const JobCard: React.FC<JobCardProps> = ({ job, userGradYear, onSwipe, on
             </span>
           ))}
         </div>
-
-        {!isGradMatch && (
-          <div className="flex items-center gap-2 text-rose-500 dark:text-rose-400 text-sm font-medium bg-rose-50 dark:bg-rose-900/20 px-3 py-2 rounded-lg border border-rose-100 dark:border-rose-900/40">
-            <GraduationCap className="w-4 h-4" />
-            Requires {job.gradYearReq} (You: {userGradYear})
-          </div>
-        )}
       </div>
 
       <div className="flex justify-between items-center px-4 mt-auto">

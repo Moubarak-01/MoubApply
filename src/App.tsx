@@ -58,10 +58,7 @@ function AppContent() {
     additionalAnswers: { canContactEmployer: '', canPerformFunctions: '', accommodationNeeds: '', previouslyEmployedHere: '', proximityToOffice: '', certifyTruthful: '' }
   });
 
-  // Employment entries state (separate for easier management)
-  const [employmentEntries, setEmploymentEntries] = useState<{
-    company: string; title: string; startMonth: string; startYear: string; endMonth: string; endYear: string; isCurrent: boolean;
-  }[]>([]);
+  // Employment entries state removed - functionality integrated into profile
 
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
@@ -81,7 +78,7 @@ function AppContent() {
       // Pass userId to filter out applied/rejected jobs
       const jobsData = await api.getJobs(user._id);
       setJobs(jobsData);
-      const userRes = await fetch('http://localhost:5000/api/auth/me', {
+      const userRes = await fetch('http://localhost:5001/api/auth/me', {
         headers: { Authorization: `Bearer ${localStorage.getItem('token')}` }
       });
       const userData = await userRes.json();
@@ -99,7 +96,7 @@ function AppContent() {
     console.log(`🔍 [TELEMETRY] User ${user._id} initiating job ingest with query: "${query}"`);
     setLoadingData(true);
     try {
-      await fetch('http://localhost:5000/api/jobs/ingest', {
+      await fetch('http://localhost:5001/api/jobs/ingest', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ query, userId: user._id })
@@ -109,6 +106,35 @@ function AppContent() {
     } catch (err) {
       console.error(`❌ [TELEMETRY] Job ingest failed:`, err);
       alert('Failed to fetch jobs');
+    } finally {
+      setLoadingData(false);
+    }
+  };
+
+  const handleRefreshJobs = async () => {
+    if (!user) return alert('Please log in first');
+    const confirmed = window.confirm('⚠️ This will clear ALL existing jobs and fetch fresh USA internships. Continue?');
+    if (!confirmed) return;
+
+    console.log(`🔄 [TELEMETRY] User ${user._id} triggering full job database refresh`);
+    setLoadingData(true);
+    try {
+      const response = await fetch('http://localhost:5001/api/jobs/ingest', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ clearFirst: true, userId: user._id })
+      });
+      const data = await response.json();
+      console.log(`✅ [TELEMETRY] Job refresh successful - ${data.newJobs} new jobs fetched`);
+
+      // Auto-refresh the job list without page reload
+      await loadData();
+
+      // Non-blocking notification (jobs already loaded)
+      console.log(`🎯 Jobs refreshed! ${data.newJobs} USA internships ready to swipe.`);
+    } catch (err) {
+      console.error(`❌ [TELEMETRY] Job refresh failed:`, err);
+      alert('Failed to refresh jobs');
     } finally {
       setLoadingData(false);
     }
@@ -192,12 +218,12 @@ function AppContent() {
   const handleSwipe = async (direction: 'right' | 'left', job: Job) => {
     if (direction === 'right' && user) {
       console.log(`👉 [TELEMETRY] User ${user._id} swiped RIGHT on job: ${job.title} at ${job.company}`);
-      fetch('http://localhost:5000/api/telemetry', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ event: 'SWIPE_RIGHT', userId: user._id, data: { title: job.title, company: job.company, jobId: job._id } }) }).catch(() => { });
+      fetch('http://localhost:5001/api/telemetry', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ event: 'SWIPE_RIGHT', userId: user._id, data: { title: job.title, company: job.company, jobId: job._id } }) }).catch(() => { });
 
       const missing = isProfileComplete();
-      if (missing.length > 0) {
+      if (Array.isArray(missing) && missing.length > 0) {
         console.warn(`⚠️ [TELEMETRY] Profile incomplete! Blocking application.`);
-        fetch('http://localhost:5000/api/telemetry', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ event: 'PROFILE_INCOMPLETE', userId: user._id, data: { missing } }) }).catch(() => { });
+        fetch('http://localhost:5001/api/telemetry', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ event: 'PROFILE_INCOMPLETE', userId: user._id, data: { missing } }) }).catch(() => { });
         alert(`⚠️ Please complete your profile! Missing: ${missing.join(', ')}`);
         return; // BLOCK SWIPE
       }
@@ -215,7 +241,7 @@ function AppContent() {
     } else if (direction === 'left') {
       console.log(`👈 [TELEMETRY] User swiped LEFT (rejected) on job: ${job.title} at ${job.company}`);
       if (user) {
-        fetch('http://localhost:5000/api/telemetry', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ event: 'SWIPE_LEFT', userId: user._id, data: { title: job.title, company: job.company, jobId: job._id } }) }).catch(() => { });
+        fetch('http://localhost:5001/api/telemetry', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ event: 'SWIPE_LEFT', userId: user._id, data: { title: job.title, company: job.company, jobId: job._id } }) }).catch(() => { });
         try {
           await api.rejectJob(user._id, job._id);
           console.log(`🚫 [TELEMETRY] Job ${job._id} permanently rejected`);
@@ -232,7 +258,7 @@ function AppContent() {
     if (!files || files.length === 0) return;
 
     console.log(`📤 [TELEMETRY] User ${user._id} uploading ${files.length} file(s): ${Array.from(files).map(f => f.name).join(', ')}`);
-    fetch('http://localhost:5000/api/telemetry', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ event: 'RESUME_UPLOAD', userId: user._id, data: { filename: files[0].name, count: files.length } }) }).catch(() => { });
+    fetch('http://localhost:5001/api/telemetry', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ event: 'RESUME_UPLOAD', userId: user._id, data: { filename: files[0].name, count: files.length } }) }).catch(() => { });
     setUploading(true);
     try {
       const result = await api.uploadFiles(user._id, Array.from(files));
@@ -870,6 +896,22 @@ function AppContent() {
                       <p className="text-xs font-bold text-slate-400 uppercase tracking-widest mb-1">Signed in as</p>
                       <p className="font-bold text-slate-800 dark:text-white">{user.name}</p>
                       <p className="text-sm text-slate-500 dark:text-slate-400">{user.email}</p>
+                    </div>
+
+                    <div className="pt-6 border-t border-slate-100 dark:border-slate-800">
+                      <h3 className="text-sm font-bold text-indigo-600 dark:text-indigo-400 uppercase tracking-widest mb-4">Admin Actions</h3>
+                      <div className="p-6 bg-indigo-50 dark:bg-indigo-900/20 border border-indigo-100 dark:border-indigo-900/50 rounded-2xl transition-colors">
+                        <p className="text-sm text-indigo-800 dark:text-indigo-300 font-medium mb-4">
+                          Clear all existing jobs and fetch fresh ones with correct seniority labels. Use this if jobs are mislabeled.
+                        </p>
+                        <button
+                          onClick={handleRefreshJobs}
+                          disabled={loadingData}
+                          className="w-full px-6 py-3 bg-indigo-600 hover:bg-indigo-700 text-white font-bold rounded-xl shadow-sm transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+                        >
+                          {loadingData ? 'Refreshing...' : '🔄 Refresh Jobs Database'}
+                        </button>
+                      </div>
                     </div>
 
                     <div className="pt-6 border-t border-slate-100 dark:border-slate-800">

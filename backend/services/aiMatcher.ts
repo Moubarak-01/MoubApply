@@ -33,20 +33,54 @@ export const enrichJobWithAI = async (jobId: string, userId: string) => {
       throw new Error('OPENROUTER_API_KEY is not defined');
     }
 
+    // Extract user's graduation info for comparison
+    const userGradYear = (user.personalDetails as any)?.gradYear || (user.structuredExperience as any)?.education?.[0]?.dates || 'Unknown';
+
     const prompt = `
-      Compare the specific tech stack and projects in the provided Resume with the Job Description. 
-      Calculate a matchScore based on strict skill overlap.
+      Analyze the provided Job Description and Candidate Resume. Generate a match analysis based on the following strict logic:
+
+      ### RESUME (CANDIDATE DATA):
+      "${user.masterResumeText}"
       
-      Resume: "${user.masterResumeText}"
-      Job Description: "${job.rawDescription}"
+      Expected Graduation Year from Resume: ${userGradYear}
       
-      Provide a JSON response with: 
-      matchScore (0-100), 
-      whyYouWillLoveIt (high-detail), 
-      theCatch (realistic warning), 
-      and topSkills (top 3 critical tech).
+      ### JOB DESCRIPTION:
+      "${job.rawDescription}"
+      Job Title: ${job.title}
+      Company: ${job.company}
       
-      Return ONLY the JSON.
+      ### ANALYSIS RULES (FOLLOW STRICTLY):
+      
+      1. **ELIGIBILITY CHECK (CRITICAL)**:
+         - Compare the "Expected Graduation" or "Years of Experience" required in the JD against the specific dates on the resume.
+         - If there is ANY mismatch (e.g., JD requires 2026 grad but resume shows 2028), you MUST:
+           a) List it in "theCatch"
+           b) You are STRICTLY FORBIDDEN from claiming "perfect match" in whyYouWillLoveIt
+           c) REDUCE matchScore by at least 20 points
+      
+      2. **TECHNICAL ALIGNMENT**:
+         - Identify 3 specific technical projects or skills on the resume that solve problems mentioned in the JD responsibilities
+         - Each claim MUST reference a specific project name or skill from the resume
+      
+      3. **FACT-CHECKING**:
+         - Every claim in "whyYouWillLoveIt" MUST be supported by a direct data point from the resume
+         - Do NOT use generic praise if a hard requirement (like graduation date) is not met
+         - Never hallucinate skills or projects not explicitly in the resume
+      
+      4. **WEIGHTED SCORING**:
+         - Start at 100 if perfect match
+         - Subtract 30 if graduation/experience requirement mismatch
+         - Subtract 10 for each missing core technical skill
+      
+      ### OUTPUT FORMAT (JSON ONLY):
+      {
+        "matchScore": <number 0-100, reflecting BOTH technical AND eligibility>,
+        "whyYouWillLoveIt": "<specific reasons with resume evidence, NO generic praise if eligibility issue exists>",
+        "theCatch": "<realistic warnings, MUST include any date/eligibility mismatches>",
+        "topSkills": ["<skill1 from resume that matches JD>", "<skill2>", "<skill3>"]
+      }
+      
+      Return ONLY the JSON, no markdown or explanation.
     `;
 
     console.log(`[AI_LOG] Prompt Snippet: "${prompt.slice(0, 200).replace(/\n/g, ' ')}..."`);

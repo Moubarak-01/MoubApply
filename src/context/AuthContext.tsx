@@ -99,7 +99,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     const checkUser = async () => {
       if (token) {
         try {
-          const res = await fetch('http://localhost:5000/api/auth/me', {
+          const res = await fetch('http://localhost:5001/api/auth/me', {
             headers: { Authorization: `Bearer ${token}` }
           });
           if (res.ok) {

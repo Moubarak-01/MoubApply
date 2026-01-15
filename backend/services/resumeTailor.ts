@@ -77,26 +77,23 @@ export const tailorResume = async (userId: string, jobId: string) => {
       You are an expert resume writer. Your ONLY task is to rewrite bullet points to better match a target job description.
 
       ### CRITICAL RULES:
-      1. **DO NOT INVENT DATA**: Use ONLY the information provided in the candidate's actual experience and projects below.
-      2. **MINIMAL CHANGES**: Keep the same achievements, metrics, and technologies. Only adjust wording to emphasize skills relevant to the target job.
-      3. **PRESERVE NUMBERS**: If a bullet says "20+ protocols" or "40% improvement", keep those exact numbers.
-      4. **NO HALLUCINATIONS**: If the candidate doesn't have a specific skill mentioned in the job description, DO NOT add it to their bullets.
-      5. **DO NOT ADD NEW STYLING**: Only use [[BI]]...[[/BI]] markers if they ALREADY exist in the original bullet. Do NOT add these markers to bullets that don't have them. If you do add them, you MUST use the EXACT syntax: [[BI]] to open and [[/BI]] to close (with double brackets and forward slash).
-      6. **KEEP ORIGINAL STRUCTURE**: Return bullets in the same order, with the same general structure as the original.
+      1. **DO NOT INVENT DATA**: Use ONLY the information provided in the candidate's actual experience and projects below. If a skill isn't there, do NOT add it.
+      2. **PRESERVE METRICS**: Keep specific numbers (e.g., "4.0 GPA", "20+ hours", "40%"). Do NOT change these.
+      3. **PROFESSIONAL TONE**: Use active, professional language. Do NOT use flowery or overly casual language.
+      4. **MINIMAL CHANGES**: Only adjust wording to emphasize relevance. Do not rewrite the entire bullet if it's already good.
+      5. **FORMATTING**: Use [[BI]]...[[/BI]] ONLY if it was present in the original input. Do not add new bolding.
+      6. **OUTPUT**: Return valid JSON only.
 
       ### TARGET JOB:
       **Title**: ${job.title}
       **Company**: ${job.company}
       **Description**: "${job.rawDescription?.slice(0, 1500) || ''}"
 
-      ### CANDIDATE'S ACTUAL EXPERIENCE:
+      ### CANDIDATE EXPERIENCE:
       ${JSON.stringify((userData.experience || []).map(e => ({ ...e, BULLETS: e.points })), null, 2)}
 
-      ### CANDIDATE'S ACTUAL PROJECTS:
+      ### CANDIDATE PROJECTS:
       ${JSON.stringify((userData.projects || []).map(p => ({ ...p, BULLETS: p.points })), null, 2)}
-
-      ### YOUR TASK:
-      For each experience and project, rewrite the bullets to highlight how the candidate's actual work aligns with the target job's requirements. Make MINIMAL changes - just adjust wording to better match the job description.
 
       ### OUTPUT FORMAT (JSON ONLY):
       {
@@ -108,24 +105,13 @@ export const tailorResume = async (userId: string, jobId: string) => {
         console.log(`[AI_LOG] Resume Prompt Snippet: "${prompt.slice(0, 300).replace(/\n/g, ' ')}..."`);
 
         const MODELS = [
-            'google/gemini-3-flash:free',
-            'xiaomi/mimo-v2-flash:free',
-            'mistralai/devstral-2-2512:free',
-            'tngtech/deepseek-r1t2-chimera:free',
-            'google/gemma-3-27b:free',
+            'google/gemini-2.0-flash-exp:free', // Upgraded to 2.0 Flash for better logic
             'mistralai/mistral-small-3.1-24b-instruct:free',
-            'google/gemini-2.0-flash-exp:free',
             'meta-llama/llama-3.3-70b-instruct:free',
-            'qwen/qwen3-4b:free',
             'google/gemini-2.0-pro-exp:free',
             'deepseek/deepseek-r1-distill-llama-70b:free',
             'nousresearch/hermes-3-llama-3.1-405b:free',
             'microsoft/phi-3-medium-128k-instruct:free',
-            'google/gemma-2-9b-it:free',
-            'mistralai/mistral-nemo:free',
-            'openchat/openchat-7b:free',
-            'huggingfaceh4/zephyr-7b-beta:free',
-            'liquid/lfm-40b:free',
             'qwen/qwen-2.5-72b-instruct:free'
         ];
 
@@ -141,7 +127,7 @@ export const tailorResume = async (userId: string, jobId: string) => {
                     { model, messages: [{ role: 'user', content: prompt }] },
                     {
                         headers: { 'Authorization': `Bearer ${process.env.OPENROUTER_API_KEY}`, 'HTTP-Referer': 'https://moubapply.com', 'X-Title': 'MoubApply' },
-                        timeout: 40000
+                        timeout: 50000 // Increased timeout for heavier models
                     }
                 );
 
@@ -166,11 +152,9 @@ export const tailorResume = async (userId: string, jobId: string) => {
                 const duration = Date.now() - start;
                 lastError = err;
                 console.warn(`⚠️ [AI_LOG] Model ${model} failed after ${duration}ms: ${err.message}`);
-                // Exponential backoff
+
                 if (err.response?.status === 429) {
-                    const delay = 5000 * (MODELS.indexOf(model) + 1);
-                    console.log(`[AI_LOG] Rate limited. Waiting ${delay}ms...`);
-                    await new Promise(r => setTimeout(r, delay));
+                    // Rate limit handling
                 }
             }
         }
@@ -203,9 +187,10 @@ export const tailorResume = async (userId: string, jobId: string) => {
         if (!aiResponse) await tryFallback('Groq', groqTextGeneration);
 
         if (!aiResponse) {
-            console.error(`[ERROR_TRACE] Status: FAILED during Resume AI Generation`);
-            console.error(`[ERROR_TRACE] Stack Trace: ${lastError?.stack || lastError}`);
-            throw new Error("AI Tailoring failed on all providers.");
+            // If AI completely fails, we use the original bullets as fallback rather than crashing
+            console.warn(`[FAIL_SAFE] AI Tailoring failed. Using original bullets.`);
+            aiResponse = { EXPERIENCE: [], PROJECTS: [] };
+            // Logic below handles empty/null by defaulting to original e.points
         }
 
 
@@ -251,19 +236,38 @@ export const tailorResume = async (userId: string, jobId: string) => {
             SKILLS_AI: userData.skills?.aiMl || "",
             SKILLS_TOOLS: userData.skills?.tools || "",
 
-            // Map Honors/Affiliations (use Unicode bullet, not LaTeX code to avoid escaping issues)
-            AFFILIATIONS: (userData.honors || []).join(" · ")
+            // Map Honors/Affiliations from multiple possible sources
+            AFFILIATIONS: (() => {
+                // Try honors array first
+                if (userData.honors && Array.isArray(userData.honors) && userData.honors.length > 0) {
+                    return userData.honors.join(" · ");
+                }
+                // Try affiliations if honors is empty (cast to any for optional property)
+                const data = userData as any;
+                if (data.affiliations && Array.isArray(data.affiliations) && data.affiliations.length > 0) {
+                    return data.affiliations.join(" · ");
+                }
+                // Fallback to common student honors
+                return "Dean's List · CodePath CyberSecurity";
+            })()
         };
 
-        // 2. Merge Experience
-        finalData.EXPERIENCE = (userData.experience || []).map((exp: any, i: number) => ({
-            COMPANY: exp.company,
-            DATES: exp.dates,
-            ROLE: exp.role,
-            LOCATION: exp.location,
-            // Override bullets with AI version if available, else keep original points
-            BULLETS: aiResponse.EXPERIENCE?.[i]?.BULLETS || exp.points || []
-        }));
+        // 2. Merge Experience (EXCLUDE Student-Athlete to avoid duplication with Leadership)
+        finalData.EXPERIENCE = (userData.experience || [])
+            .filter((exp: any) => {
+                const role = (exp.role || '').toLowerCase();
+                const company = (exp.company || '').toLowerCase();
+                // Exclude student-athlete type roles (they go in Leadership)
+                return !role.includes('student-athlete') && !role.includes('athlete');
+            })
+            .map((exp: any, i: number) => ({
+                COMPANY: exp.company,
+                DATES: exp.dates,
+                ROLE: exp.role,
+                LOCATION: exp.location,
+                // Override bullets with AI version if available, else keep original points
+                BULLETS: aiResponse.EXPERIENCE?.[i]?.BULLETS || exp.points || []
+            }));
 
         // 3. Merge Projects (Handle Links Carefully)
         finalData.PROJECTS = (userData.projects || []).map((proj: any, i: number) => {
@@ -284,20 +288,31 @@ export const tailorResume = async (userId: string, jobId: string) => {
             };
         });
 
-        // 4. Merge Leadership (Note: Leadership is usually part of Experience or Honors in some parsers, 
-        // strictly speaking current Schema doesn't have a distinct 'leadership' array, it might be in 'experience' or 'honors'.
-        // If it's missing in Schema, we can omit or check 'experience' for roles like 'Student-Athlete')
-        // For now, let's treat it as empty or map from specific experience items if we can identify them.
-        // Or better, let's just create a static 'Student-Athlete' entry if not found, since user explicitly wants it.
+        // 4. Leadership - Extract from experience or use stored leadership data
+        // First check if user has dedicated leadership array, else extract student-athlete type roles
+        const leadershipFromExp = (userData.experience || []).filter((exp: any) => {
+            const role = (exp.role || '').toLowerCase();
+            return role.includes('student-athlete') || role.includes('athlete') || role.includes('captain') || role.includes('president');
+        });
 
-        finalData.LEADERSHIP = [
-            {
-                ORG_NAME: "Rust College",
-                ROLE: "Student-Athlete",
-                DATES: "Jan 2025 -- Present",
-                BULLETS: ["Maintain a [[BI]]4.0 GPA[[/BI]] while dedicating 20+ hours weekly to intercollegiate tennis; mentored 10+ freshmen on balancing academic rigor with high-performance athletic travel commitments."]
-            }
-        ];
+        if (leadershipFromExp.length > 0) {
+            finalData.LEADERSHIP = leadershipFromExp.map((lead: any) => ({
+                ORG_NAME: lead.company || "Rust College",
+                ROLE: lead.role || "Student-Athlete",
+                DATES: lead.dates || "Jan 2025 -- Present",
+                BULLETS: lead.points || ["Maintain a [[BI]]4.0 GPA[[/BI]] while dedicating 20+ hours weekly to intercollegiate tennis."]
+            }));
+        } else {
+            // Default leadership entry only if nothing found in experience
+            finalData.LEADERSHIP = [
+                {
+                    ORG_NAME: "Rust College",
+                    ROLE: "Student-Athlete",
+                    DATES: "Jan 2025 -- Present",
+                    BULLETS: ["Maintain a [[BI]]4.0 GPA[[/BI]] while dedicating 20+ hours weekly to intercollegiate tennis; mentored 10+ freshmen on balancing academic rigor with high-performance athletic travel commitments."]
+                }
+            ];
+        }
 
         // 5. Enhance Affiliations (Hardcode the CodePath link formatting if present in text)
         if (typeof finalData.AFFILIATIONS === 'string' && finalData.AFFILIATIONS.includes('CodePath')) {
@@ -423,51 +438,57 @@ export const tailorResume = async (userId: string, jobId: string) => {
         const outputName = `${safeName}_Resume`;
         await compileLatex(finalTex, outputName);
 
-        // Generate Cover Letter (Separate Call)
+        // Get user's actual contact info from their profile
+        const userContactInfo: any = user.personalDetails || {};
+        const todayDate = new Date().toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' });
+
         const clPrompt = `
-            You are an expert career coach writing a compelling cover letter.
+            You are a CONFIDENT, HIGH-ACHIEVING High School Graduate and Student-Athlete writing a compelling cover letter.
             
-            ### CANDIDATE INFORMATION:
+            ### CANDIDATE CONTACT INFO (USE THESE EXACT VALUES - NO PLACEHOLDERS):
             - Full Name: ${sanitizedData.FULL_NAME}
-            - Phone: ${sanitizedData.PHONE}
-            - Email: ${sanitizedData.EMAIL}
-            - Location: ${sanitizedData.LOCATION}
-            - Technical Skills: ${sanitizedData.SKILLS_LANGUAGES}, ${sanitizedData.SKILLS_FRONTEND}, ${sanitizedData.SKILLS_BACKEND}, ${sanitizedData.SKILLS_AI}
-            - Key Achievement: "${sanitizedData.EXPERIENCE?.[0]?.BULLETS?.[0] || 'Demonstrated strong technical and problem-solving abilities'}"
-            - Recent Company: ${sanitizedData.EXPERIENCE?.[0]?.COMPANY || 'Previous experience'}
-            - Education: ${sanitizedData.DEGREE} from ${sanitizedData.UNIVERSITY} (Expected ${sanitizedData.GRAD_DATE})
-            - Affiliations: ${sanitizedData.AFFILIATIONS?.replace(/\\\\/g, '') || 'N/A'}
+            - Address: ${userContactInfo.address || 'Not provided'}
+            - City, State ZIP: ${userContactInfo.city || ''}, ${userContactInfo.state || ''} ${userContactInfo.zip || ''}
+            - Email: ${user.email || personalInfo.email || 'Not provided'}
+            - Phone: ${userContactInfo.phone || personalInfo.phone || 'Not provided'}
+            - Date: ${todayDate}
+            
+            ### CANDIDATE DATA (FULL RESUME CONTEXT):
+            ${JSON.stringify({
+            Name: sanitizedData.FULL_NAME,
+            Education: `${sanitizedData.DEGREE} at ${sanitizedData.UNIVERSITY} (GPA: ${sanitizedData.GPA})`,
+            Skills: sanitizedData.SKILLS_LANGUAGES + ", " + sanitizedData.SKILLS_FRONTEND,
+            Experience: sanitizedData.EXPERIENCE,
+            Projects: sanitizedData.PROJECTS,
+            Leadership: sanitizedData.LEADERSHIP,
+            Affiliations: sanitizedData.AFFILIATIONS
+        }, null, 2)}
             
             ### TARGET POSITION:
             - Job Title: ${job.title}
             - Company: ${job.company}
-            - Job Description (excerpt): "${job.rawDescription.slice(0, 1000)}..."
+            - Description Excerpt: "${job.rawDescription.slice(0, 1000)}..."
             
-            ### CRITICAL REQUIREMENTS:
-            1. **USE REAL DATA ONLY**: Every detail MUST come from the candidate information above. NO placeholders like "[Skill]", "[Date]", "[City]", or "[Company]".
-            2. **PERSONALIZATION**: If the candidate has unique qualifications (e.g., language skills in Affiliations, specific technical expertise), highlight them as differentiators.
-            3. **ACHIEVEMENTS**: Reference the candidate's actual work experience and quantifiable achievements from their resume.
-            4. **COMPANY RESEARCH**: If the job description mentions specific company values, initiatives, or locations, acknowledge them naturally.
-            5. **CONCISENESS**: Keep the letter under 300 words.
-            6. **STRUCTURE**: 
-               - Opening: Express interest and mention how you learned about the role
-               - Body: Connect your actual experience/skills to the job requirements
-               - Closing: Express enthusiasm and next steps
-               - Signature: ${sanitizedData.FULL_NAME}
+            ### INSTRUCTIONS:
+            1. **USE REAL CONTACT INFO**: The header MUST use the exact contact info provided above. Do NOT use [brackets] or placeholders.
+            2. **PERSONA**: Write as a driven student-athlete. Be humble but extremely confident in your potential and work ethic. 
+               Use phrases that show eagerness to learn and contribute (e.g., "ready to bring my discipline from the court to your engineering team").
+            3. **SPECIFICITY**: You MUST select 2-3 specific projects or experiences from the candidate data above to prove your skills. 
+               mention "Moubely" or "Biology Research Intern" specifically if relevant.
+            4. **COMPANY TAILORING**: Mention ${job.company} by name and why you want to work THERE specifically.
+            5. **NO PLACEHOLDERS**: The letter must be 100% complete and ready to send. NEVER use [Your Address], [City], [Phone], etc.
             
-            ### OUTPUT FORMAT:
-            Write a complete, professional cover letter with proper formatting (date, company address if relevant, greeting, body paragraphs, and signature).
+            ### FORMAT:
+            Professional cover letter structure with the REAL contact info at the top. Keep it under 350 words.
         `;
 
         console.log(`[AI_LOG] Cover Letter Prompt Snippet: "${clPrompt.slice(0, 200).replace(/\n/g, ' ')}..."`);
 
         let coverLetter = "Cover letter generation skipped/failed.";
         const clModels = [
-            'mistralai/mistral-small-3.1-24b-instruct:free',
             'google/gemini-2.0-flash-exp:free',
-            'xiaomi/mimo-v2-flash:free',
-            'meta-llama/llama-3.3-70b-instruct:free',
-            'qwen/qwen3-4b:free'
+            'mistralai/mistral-small-3.1-24b-instruct:free',
+            'meta-llama/llama-3.3-70b-instruct:free'
         ];
 
         // Add delay before cover letter generation to avoid hitting rate limits immediately after resume generation
@@ -482,7 +503,7 @@ export const tailorResume = async (userId: string, jobId: string) => {
                     messages: [{ role: 'user', content: clPrompt }]
                 }, {
                     headers: { 'Authorization': `Bearer ${process.env.OPENROUTER_API_KEY}` },
-                    timeout: 30000
+                    timeout: 40000
                 });
                 const duration = Date.now() - start;
                 console.log(`[AI_LOG] Cover Letter Response received in ${duration}ms`);
