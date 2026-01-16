@@ -2,6 +2,8 @@ import axios from 'axios';
 import { Job } from '../models/Job.schema';
 import { User } from '../models/User.schema';
 import { groqTextGeneration } from './groqService';
+import { hfTextGeneration } from './hfService';
+import { nvidiaTextGeneration } from './nvidiaService';
 
 interface UserContext {
     resumeText: string;
@@ -72,6 +74,20 @@ const runAI = async (prompt: string, options?: string[]): Promise<string> => {
         'liquid/lfm-40b:free'
     ];
 
+    // Helper to validate and return matches
+    const processAnswer = (ans: string): string | null => {
+        let clean = ans.trim().replace(/^["']|["']$/g, '');
+        if (options) {
+            if (options.includes(clean)) return clean;
+            const lower = clean.toLowerCase();
+            const best = options.find(o => o.toLowerCase() === lower || o.toLowerCase().includes(lower));
+            if (best) return best;
+            return null; // Invalid option
+        }
+        return clean;
+    };
+
+    // 1. OpenRouter Waterfall
     for (const model of MODELS) {
         try {
             const response = await axios.post(
@@ -79,7 +95,7 @@ const runAI = async (prompt: string, options?: string[]): Promise<string> => {
                 {
                     model,
                     messages: [{ role: 'user', content: prompt }],
-                    temperature: 0.1 // Low temp for determinism
+                    temperature: 0.1
                 },
                 {
                     headers: {
@@ -92,46 +108,47 @@ const runAI = async (prompt: string, options?: string[]): Promise<string> => {
                 }
             );
 
-            let answer = response.data.choices[0].message.content.trim();
+            const raw = response.data.choices[0].message.content;
+            const result = processAnswer(raw);
+            if (result) return result;
 
-            // Cleanup
-            answer = answer.replace(/^["']|["']$/g, '');
-
-            // Validation for Options
-            if (options) {
-                // Try exact match
-                if (options.includes(answer)) return answer;
-
-                // Try fuzzy match
-                const lowerAnswer = answer.toLowerCase();
-                const bestMatch = options.find(o => o.toLowerCase() === lowerAnswer || o.toLowerCase().includes(lowerAnswer));
-                if (bestMatch) return bestMatch;
-
-                // Fallback: If AI returns something insane, log it and continue loop
-                console.warn(`[AI_QA] AI returned "${answer}" which is not in options: ${options}`);
-                throw new Error('Invalid option selected');
-            }
-
-            return answer;
+            console.warn(`[AI_QA] Model ${model} returned invalid option: ${raw}`);
 
         } catch (err: any) {
             console.warn(`⚠️ [AI_QA] Model ${model} failed: ${err.message}`);
         }
     }
 
-    // Fallback to Groq if OpenRouter fails
+    // 2. Fallback: Hugging Face
+    try {
+        console.log('[AI_QA] Falling back to Hugging Face...');
+        const hfAns = await hfTextGeneration(prompt, 200);
+        if (hfAns) {
+            const result = processAnswer(hfAns);
+            if (result) return result;
+        }
+    } catch (e) { console.warn('[AI_QA] HF failed'); }
+
+    // 3. Fallback: NVIDIA
+    try {
+        console.log('[AI_QA] Falling back to NVIDIA...');
+        const nvAns = await nvidiaTextGeneration(prompt, 200);
+        if (nvAns) {
+            const result = processAnswer(nvAns);
+            if (result) return result;
+        }
+    } catch (e) { console.warn('[AI_QA] NVIDIA failed'); }
+
+    // 4. Fallback: Groq
     try {
         console.log('[AI_QA] Falling back to Groq...');
         const groqAns = await groqTextGeneration(prompt, 100);
-        if (!groqAns) throw new Error('Groq returned null');
-        let cleanGroq = groqAns.trim().replace(/^["']|["']$/g, '');
-        if (options) {
-            const bestMatch = options.find(o => o.toLowerCase() === cleanGroq.toLowerCase());
-            return bestMatch || options[0]; // Safe default
+        if (groqAns) {
+            const result = processAnswer(groqAns);
+            if (result) return result;
         }
-        return cleanGroq;
-    } catch (e) {
-        console.error('[AI_QA] All AI providers failed.');
-        return options ? options[0] : ''; // Ultimate fallback
-    }
+    } catch (e) { console.warn('[AI_QA] Groq failed'); }
+
+    console.error('[AI_QA] All AI providers failed.');
+    return options ? options[0] : '';
 };

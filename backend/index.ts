@@ -28,6 +28,9 @@ import { signup, login, getMe, deleteAccount } from './services/auth';
 import { tailorResume } from './services/resumeTailor';
 import { parseResumeToJSON } from './services/resumeParser';
 import { transcribeBuffer } from './services/audioTranscriber';
+import { hfTextGeneration } from './services/hfService';
+import { nvidiaTextGeneration } from './services/nvidiaService';
+import { groqTextGeneration } from './services/groqService';
 import { configureSecurity, authLimiter } from './middleware/security';
 import { validate, signupSchema, loginSchema, ingestSchema } from './middleware/validate';
 
@@ -381,6 +384,41 @@ app.post('/api/ai/assistant', async (req: Request, res: Response): Promise<any> 
         }
 
         if (!streamSuccess && !res.headersSent) {
+            console.log('⚠️ [AI_CHAT] OpenRouter exhausted. Trying fallbacks (HF -> NVIDIA -> Groq)...');
+
+            let fallbackContent: string | null = null;
+            const fallbackPrompt = `${systemPrompt}\n\nUSER MESSAGE: ${message}`;
+
+            // 1. Try Hugging Face
+            try {
+                console.log('🤖 AI Chat trying fallback: Hugging Face');
+                fallbackContent = await hfTextGeneration(fallbackPrompt, 500);
+            } catch (e) { console.warn('HF Fallback failed'); }
+
+            // 2. Try NVIDIA
+            if (!fallbackContent) {
+                try {
+                    console.log('🤖 AI Chat trying fallback: NVIDIA');
+                    fallbackContent = await nvidiaTextGeneration(fallbackPrompt, 500);
+                } catch (e) { console.warn('NVIDIA Fallback failed'); }
+            }
+
+            // 3. Try Groq
+            if (!fallbackContent) {
+                try {
+                    console.log('🤖 AI Chat trying fallback: Groq');
+                    fallbackContent = await groqTextGeneration(fallbackPrompt, 500);
+                } catch (e) { console.warn('Groq Fallback failed'); }
+            }
+
+            if (fallbackContent) {
+                res.write(`data: ${JSON.stringify({ content: fallbackContent })}\n\n`);
+                res.write('data: [DONE]\n\n');
+                res.end();
+                return;
+            }
+
+            // Final Give-up
             res.write(`data: ${JSON.stringify({ content: "I'm currently receiving too many requests. Please try again in a moment." })}\n\n`);
             res.write('data: [DONE]\n\n');
             res.end();

@@ -270,6 +270,25 @@ export const generateEssay = async (jobId: string, userId: string): Promise<stri
     }
   }
 
+  // Fallback Chain: HF -> NVIDIA -> Groq
+  try {
+    console.log('[AI_GEN] Falling back to Hugging Face...');
+    const hfAns = await hfTextGeneration(prompt, 300);
+    if (hfAns) return hfAns;
+  } catch (e) { console.warn('[AI_GEN] HF failed'); }
+
+  try {
+    console.log('[AI_GEN] Falling back to NVIDIA...');
+    const nvAns = await nvidiaTextGeneration(prompt, 300);
+    if (nvAns) return nvAns;
+  } catch (e) { console.warn('[AI_GEN] NVIDIA failed'); }
+
+  try {
+    console.log('[AI_GEN] Falling back to Groq...');
+    const groqAns = await groqTextGeneration(prompt, 300);
+    if (groqAns) return groqAns;
+  } catch (e) { console.warn('[AI_GEN] Groq failed'); }
+
   // Ultimate fallback
   console.error(`[AI_GEN] All models failed, using fallback essay.`);
   return `I am excited to apply for the ${job.title} position at ${job.company}. My background aligns well with your team's mission, and I am eager to contribute my skills to drive meaningful impact.`;

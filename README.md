@@ -46,8 +46,11 @@ To combat the unreliability of free AI tiers, MoubApply uses a **Dynamic Waterfa
 4.  **Safety Net**: The chain ends with high-availability, low-traffic models (e.g., `Zephyr-7B`, `Toppy-M` ) to guarantee a response.
 
 **Current Priority Chains**:
-*   **Matching/Essays**: `Xiaomi MiMo-V2` → `Llama 3.3` → `Gemini 2.0` → ...
-*   **Assistant Chat**: `Llama 3.3 70B` → `Mistral` → `Gemini` → ...
+**Current Priority Chains**:
+*   **Matching/Essays**: `Xiaomi MiMo-V2` → `Llama 3.3` → `Gemini 2.0` → **Hugging Face** (Mistral/Llama) → **NVIDIA NIM** (DeepSeek/Qwen) → **Groq** (Llama)
+*   **Assistant Chat**: `Llama 3.3 70B` → `Mistral` → `Gemini` → **Hugging Face** → **NVIDIA NIM** → **Groq**
+
+This multi-layered approach ensures that even if one provider (like OpenRouter) is down, the system seamlessly switches to another API provider.
 
 ---
 
