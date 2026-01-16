@@ -1,6 +1,12 @@
 <div align="center">
 
 # MoubApply ✨
+  __  __             _                         _       
+ |  \/  | ___  _   _| |__   / \   _ __  _ __ | |_   _ 
+ | |\/| |/ _ \| | | | '_ \ / _ \ | '_ \| '_ \| | | | |
+ | |  | | (_) | |_| | |_) / ___ \| |_) | |_) | | |_| |
+ |_|  |_|\___/ \__,_|_.__/_/   \_\ .__/| .__/|_|\__, |
+                                 |_|   |_|      |___/
 
 ![Version](https://img.shields.io/badge/version-2.0-blueviolet?style=for-the-badge)
 ![React](https://img.shields.io/badge/React-18-61DAFB?style=for-the-badge&logo=react)
