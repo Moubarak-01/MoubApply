@@ -1,125 +1,126 @@
-# MoubApply - AI-Powered Job Application Agent
+<div align="center">
+
+# MoubApply ✨
+
+![Version](https://img.shields.io/badge/version-2.0-blueviolet?style=for-the-badge)
+![React](https://img.shields.io/badge/React-18-61DAFB?style=for-the-badge&logo=react)
+![NodeJS](https://img.shields.io/badge/Node.js-18-339933?style=for-the-badge&logo=node.js)
+![MongoDB](https://img.shields.io/badge/MongoDB-6.0-47A248?style=for-the-badge&logo=mongodb)
+![TypeScript](https://img.shields.io/badge/TypeScript-5.0-3178C6?style=for-the-badge&logo=typescript)
+![Playwright](https://img.shields.io/badge/Playwright-Automation-45ba4b?style=for-the-badge&logo=playwright)
+
+**The Ultimate AI-Powered Job Application Agent & Career Assistant**
+
+[Features](#-features-overview) • [Latest Updates](#-latest-updates-v20) • [Tech Stack](#-tech-stack) • [Installation](#-installation--setup) • [AI Architecture](#-ai-waterfall-architecture-defense-in-depth)
+
+</div>
+
+---
+
+## 📖 Overview
 
 MoubApply is a sophisticated, full-stack application designed to automate and optimize the job search process. It combines a "Tinder-style" discovery interface with a **multi-provider AI engine** featuring a robust **Waterfall Fallback System** and a **Playwright-powered automation agent**.
 
-## 🚀 Key Features
+---
 
-### 1. **Discovery & Smart Matching**
-- **Tinder-style Swipe Deck**: Built with `framer-motion` for fluid job discovery. Swipe Right to apply, Left to skip.
-- **AI Matching Engine**: Analyzes your resume against job postings using a priority cascade:
-    1.  **Xiaomi MiMo-V2-Flash** (Priority Matching)
-    2.  **Meta Llama 3.3 70B** (Deep Analysis)
-    3.  **Fallback Cluster** (Gemini, Mistral, Qwen, etc.)
-- **AI Job Summaries**: Generates "Why you'll love it" and "The catch" insights for every role.
+## 🆕 Latest Updates (v2.0)
 
-### 2. **Floating AI Career Assistant**
-- **Global Access**: A persistent, draggable chat bubble available anywhere in the app (Toggle: `Shift + A`).
-- **Smart Model Selection**: Prioritizes **Llama 3.3 70B** for high-quality chat, automatically falling back to lighter models if rate-limited.
-- **Resume-Aware**: Reads your uploaded files to answer specific questions about your experience.
-- **Voice Input**: Built-in speech-to-text using local Whisper transcription.
+### 1. Four-Tier AI Defense-in-Depth Architecture
+We've engineered a military-grade fallback system to ensure zero downtime:
 
-### 3. **Smart Tracker & Automation**
-- **Kanban Board**: Track jobs from `Queued` → `Applied`.
-- **⚡ Auto-Apply Agent**: Uses **Playwright** to launch a browser, detect the ATS (Greenhouse, Lever, Workday), and auto-fill forms.
-- **AI-Driven Form Filling**: Uses the `aiQuestionAnswerer` service to intelligently answer essay questions and complex dropdowns based on your profile.
-- **Telemetry & Observability**: Real-time browser logs (clicks, navigation, errors) are forwarded to your backend terminal for full visibility.
+| Tier | Provider | Models | Purpose |
+|:----:|:---------|:-------|:--------|
+| **1** | **OpenRouter** | Xiaomi MiMo, Llama 3.3 70B, Gemini 2.0 | **Primary** - High Intelligence & Speed |
+| **2** | **Hugging Face** | Mistral 7B, Zephyr 7B Beta | **Secondary** - Reliable Static Inference |
+| **3** | **NVIDIA NIM** | DeepSeek R1, Qwen 2.5 | **Tertiary** - Enterprise-Grade Fallback |
+| **4** | **Groq** | Llama 3 8B (Instant) | **Emergency** - Ultra-Low Latency |
 
-### 4. **Profile & Resume Management**
-- **Multi-File Upload**: Store up to 6 resumes.
-- **Intelligent Parsing**: Extracts text from **PDF**, **DOCX**, and **TXT** files.
-- **LaTeX Resume Generation**: Compiles professional PDFs using your custom LaTeX template.
-- **Portability**: All user data is stored in MongoDB and can be permanently wiped with the "Delete Account" feature.
+### 2. Advanced Telemetry
+- **Browser-to-Terminal Mirroring**: Watch Playwright click, type, and navigate in real-time on your backend console.
+- **Explicit Event Logging**: Track every "AI Match" and "Profile Update" with dedicated API events.
 
-### 5. **Auto Theme Switching**
-- **Time-Based Themes**: Automatically switches to Light (6AM-6PM) and Dark (6PM-6AM).
+### 3. Port Migration & Stability
+- **Port 5001 Standard**: Migrated from 5000 to prevent zombie process conflicts.
+- **Graceful Shutdown**: Enhanced signal handling to kill orphaned Chrome instances.
 
 ---
 
-## 🤖 AI Provider Waterfall System
+## 🌟 Features Overview
 
-To combat the unreliability of free AI tiers, MoubApply uses a **Dynamic Waterfall Strategy**. 
+### 🛡️ Smart Tracking & Automation
+- **Kanban Board**: Drag-and-drop tracking from `Queued` → `Applied`.
+- **⚡ Auto-Apply Agent**: Launches a visible browser to auto-fill complex applications (Greenhouse, Lever, Workday).
+- **AI Form Filler**: Uses the `aiQuestionAnswerer` service to intelligently write essays and select dropdowns based on your resume.
 
-**The algorithm**:
-1.  **Attempt Priority Model**: Tries the user-preferred model (e.g., Xiaomi for matching).
-2.  **Detect Failure**: If it receives a `429 Too Many Requests` or `404 Not Found`...
-3.  **Instant Fallback**: It immediately retries with the next model in the chain.
-4.  **Safety Net**: The chain ends with high-availability, low-traffic models (e.g., `Zephyr-7B`, `Toppy-M` ) to guarantee a response.
+### 🤖 Floating AI Career Assistant
+- **Global Access**: Press **`Shift + A`** anywhere to summon the assistant.
+- **Context-Aware**: Reads your active resume to answer questions like *"Do I have enough React experience for this role?"*.
+- **Voice-to-Text**: Built-in local Whisper transcription for voice commands.
 
-**Current Priority Chains**:
-**Current Priority Chains**:
-*   **Matching/Essays**: `Xiaomi MiMo-V2` → `Llama 3.3` → `Gemini 2.0` → **Hugging Face** (Mistral/Llama) → **NVIDIA NIM** (DeepSeek/Qwen) → **Groq** (Llama)
-*   **Assistant Chat**: `Llama 3.3 70B` → `Mistral` → `Gemini` → **Hugging Face** → **NVIDIA NIM** → **Groq**
-
-This multi-layered approach ensures that even if one provider (like OpenRouter) is down, the system seamlessly switches to another API provider.
-
----
-
-## 🛠 Tech Stack
-
-| Layer | Technologies |
-|-------|--------------|
-| **Frontend** | React 18, TypeScript, Tailwind CSS, Framer Motion, Lucide Icons |
-| **Backend** | Node.js (Express), TypeScript, MongoDB Atlas (Mongoose) |
-| **AI Providers** | OpenRouter (aggregating Mistral, Meta, Google, Xiaomi, etc.) |
-| **Automation** | Playwright (Headless/Headful Browser Automation) |
-| **Resume** | LaTeX (MiKTeX/pdflatex), pdf-parse-fork, mammoth |
-| **Speech** | Local Whisper STT |
+### 🔍 Discovery Engine
+- **Swipe Deck**: Fluid "Tinder-for-Jobs" interface.
+- **Smart Enrich**: AI pre-analyzes every job to tell you *"Why you'll love it"* and *"The Catch"*.
 
 ---
 
-## 🚧 Challenges Faced & Solutions
+## 🏗️ AI Waterfall Architecture ("Defense-in-Depth")
 
-During the development of v2.0, we encountered and solved several critical engineering challenges:
+MoubApply uses a dynamic cascade to combat rate limits. It doesn't just retry—it **switches providers**.
 
-### 1. Rate Limiting & The "Zombie" Process
-*   **Challenge**: Free AI API tiers often return `429` errors during batch processing. Additionally, node processes on port `5000` were hanging, causing "Address in Use" errors.
-*   **Solution**: 
-    *   Implemented the **Waterfall Fallback** system to never fail on a single model error.
-    *   Migrated the entire stack to **Port 5001** to bypass the "zombie" processes on 5000.
-    *   Added **Explicit Telemetry** to `taskkill` commands to ensure clean shutdowns.
-
-### 2. Frontend-Backend Visibility
-*   **Challenge**: It was hard to know if the auto-applier was working or if the AI was thinking.
-*   **Solution**: 
-    *   **Browser-to-Terminal Log Forwarding**: We capture Playwright's console logs and print them in the backend terminal with emojis (e.g., `🖱️ [CLICK]`, `📝 [FILL]`).
-    *   **Explicit Telemetry Events**: Added `POST /api/telemetry` calls for Profile Updates and AI Chats to confirm data flow.
-
-### 3. Cross-Origin Resource Sharing (CORS)
-*   **Challenge**: The PDF viewer and Resume Tailor required loading resources from local files, which browsers block by default.
-*   **Solution**: Configured `Helmet` CSP directives to allow framing from `localhost:5173` and disabled `X-Frame-Options` for specific routes.
+1.  **Selection**: User picks a model (e.g., Xiaomi).
+2.  **Detection**: If `429 Too Many Requests` occurs...
+3.  **Switch**: The system instantly reroutes the prompt to **Hugging Face Inference API**.
+4.  **Escalation**: If HF fails, it routes to **NVIDIA NIM**.
+5.  **Last Resort**: Finally, it tries **Groq** for an guaranteed response.
 
 ---
 
-## ⚙️ Setup & Configuration
+## ⚙️ Environment Configuration
+
+### Backend Environment (`/backend/.env`)
+
+Create a file named `.env` inside the `backend/` folder. **Ensure all keys are populated for maximum reliability.**
+
+```env
+# Server Configuration
+PORT=5001
+MONGO_URI=mongodb+srv://...
+
+# --------------------------
+# 🤖 AI PROVIDER KEYS
+# --------------------------
+
+# 1. OpenRouter (Primary Aggregator)
+OPENROUTER_API_KEY=sk-or-v1-...
+
+# 2. Hugging Face (Fallback Layer 1)
+HF_TOKEN=hf_...
+
+# 3. NVIDIA NIM (Fallback Layer 2)
+NVIDIA_API_KEY=nvapi-...
+
+# 4. Groq (Emergency Layer 3)
+GROQ_API_KEY=gsk_...
+
+# --------------------------
+# 🌍 JOB DATA SOURCES
+# --------------------------
+RAPIDAPI_KEY=...
+RAPIDAPI_HOST=jsearch.p.rapidapi.com
+ADZUNA_APP_ID=...
+ADZUNA_APP_KEY=...
+```
+
+---
+
+## 📦 Installation & Setup
 
 ### 1. Prerequisites
 - Node.js v18+
 - MongoDB Atlas Account
-- API Keys for OpenRouter (and optionally others)
 - MiKTeX (for LaTeX PDF generation)
 
-### 2. Backend Environment (`backend/.env`)
-
-Create a `.env` file in the `backend/` directory:
-
-```env
-PORT=5001
-MONGO_URI=your_mongodb_atlas_connection_string
-
-# AI Providers
-OPENROUTER_API_KEY=your_openrouter_key
-# (Other keys optional if using OpenRouter)
-
-# Job APIs
-RAPIDAPI_KEY=your_rapidapi_key
-RAPIDAPI_HOST=jsearch.p.rapidapi.com
-ADZUNA_APP_ID=your_adzuna_app_id
-ADZUNA_APP_KEY=your_adzuna_app_key
-```
-
-### 3. Running the Application
-
-**Terminal 1 (Backend)**:
+### 2. Backend Setup
 ```bash
 cd backend
 npm install
@@ -127,7 +128,7 @@ npm start
 ```
 *Runs on http://localhost:5001*
 
-**Terminal 2 (Frontend)**:
+### 3. Frontend Setup
 ```bash
 npm install
 npm run dev
@@ -136,28 +137,29 @@ npm run dev
 
 ---
 
-## 📖 Usage Guide
+## � Project Structure
 
-1.  **Sign Up**: Create an account on the Signup screen.
-2.  **Upload Resume**: Go to **Profile** and upload your PDF resume. **required** for AI features.
-3.  **Discovery**: Swipe right on jobs to queue them.
-4.  **Auto-Apply**: 
-    - Go to **Tracker**.
-    - Click **Auto-Apply** on a queued job.
-    - The backend terminal will show the real-time progress of the bot.
+```
+MoubApply/
+├── backend/
+│   ├── services/
+│   │   ├── aiMatcher.ts       # Primary AI Logic
+│   │   ├── nvidiaService.ts   # NVIDIA Fallback
+│   │   ├── hfService.ts       # Hugging Face Fallback
+│   │   └── autoApplier.ts     # Playwright Bot
+│   └── index.ts               # Express API
+├── src/
+│   ├── components/
+│   │   ├── AiAssistant.tsx    # Floating Chat
+│   │   └── JobDeck.tsx        # Discovery UI
+│   └── App.tsx
+└── README.md
+```
 
 ---
 
-## 🔐 Privacy Note
+<div align="center">
 
-MoubApply is built for privacy:
-- All uploaded files are deleted when the backend restarts.
-- Resume text is cleared from the database on startup.
-- Generated PDFs are auto-cleaned after application submission.
-- **Delete Account** button permanently wipes all user data from MongoDB.
+**Built with ❤️ by [Moubarak01](https://github.com/Moubarak-01)**
 
----
-
-## 📄 License
-
-MIT License - Built by [Moubarak01](https://github.com/Moubarak01)
+</div>
