@@ -86,25 +86,17 @@ export const enrichJobWithAI = async (jobId: string, userId: string) => {
     console.log(`[AI_LOG] Prompt Snippet: "${prompt.slice(0, 200).replace(/\n/g, ' ')}..."`);
 
     const MODELS = [
-      'google/gemini-3-flash:free',
       'xiaomi/mimo-v2-flash:free',
-      'mistralai/devstral-2-2512:free',
-      'tngtech/deepseek-r1t2-chimera:free',
-      'google/gemma-3-27b:free',
-      'mistralai/mistral-small-3.1-24b-instruct:free',
-      'google/gemini-2.0-flash-exp:free',
       'meta-llama/llama-3.3-70b-instruct:free',
-      'qwen/qwen3-4b:free',
-      'google/gemini-2.0-pro-exp:free',
-      'deepseek/deepseek-r1-distill-llama-70b:free',
-      'nousresearch/hermes-3-llama-3.1-405b:free',
-      'microsoft/phi-3-medium-128k-instruct:free',
-      'google/gemma-2-9b-it:free',
-      'mistralai/mistral-nemo:free',
-      'openchat/openchat-7b:free',
+      'google/gemini-2.0-flash-exp:free',
+      'mistralai/mistral-small-3.1-24b-instruct:free',
+      'meta-llama/llama-3.1-8b-instruct:free',
       'huggingfaceh4/zephyr-7b-beta:free',
+      'openchat/openchat-7b:free',
+      'gryphe/mythomax-l2-13b:free',
+      'undi95/toppy-m-7b:free',
       'liquid/lfm-40b:free',
-      'qwen/qwen-2.5-72b-instruct:free'
+      'google/gemma-2-9b-it:free'
     ];
 
     let aiData: any = null;
@@ -242,10 +234,16 @@ export const generateEssay = async (jobId: string, userId: string): Promise<stri
   `;
 
   const MODELS = [
+    'xiaomi/mimo-v2-flash:free',
+    'meta-llama/llama-3.3-70b-instruct:free',
     'google/gemini-2.0-flash-exp:free',
     'mistralai/mistral-small-3.1-24b-instruct:free',
-    'meta-llama/llama-3.3-70b-instruct:free',
-    'qwen/qwen-2.5-72b-instruct:free'
+    'meta-llama/llama-3.1-8b-instruct:free',
+    'huggingfaceh4/zephyr-7b-beta:free',
+    'openchat/openchat-7b:free',
+    'gryphe/mythomax-l2-13b:free',
+    'undi95/toppy-m-7b:free',
+    'liquid/lfm-40b:free'
   ];
 
   for (const model of MODELS) {

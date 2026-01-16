@@ -171,7 +171,8 @@ export const AiAssistant = forwardRef<AiAssistantRef, AiAssistantProps>(({ userI
     e?.preventDefault();
     if (!inputValue.trim() || isThinking || !userId) return;
 
-    const randomModel = MODELS[Math.floor(Math.random() * MODELS.length)].id;
+    // Let backend handle model selection (Waterfall: Llama 3.3 -> Fallbacks)
+    const randomModel = "";
     const userText = inputValue.trim();
     setMessages(prev => [...prev, { role: 'user', text: userText }, { role: 'model', text: '' }]);
     setInputValue('');
@@ -179,6 +180,13 @@ export const AiAssistant = forwardRef<AiAssistantRef, AiAssistantProps>(({ userI
     setHasStartedStreaming(false);
     setShowThinkingLoader(false);
     isUserAtBottomRef.current = true;
+
+    // Explicit Telemetry
+    fetch('http://localhost:5001/api/telemetry', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ event: 'AI_MATCH', userId, data: { message: userText, model: randomModel } })
+    }).catch(() => { });
 
     try {
       const response = await fetch('http://localhost:5001/api/ai/assistant', {

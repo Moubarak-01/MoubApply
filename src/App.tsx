@@ -51,6 +51,7 @@ function AppContent() {
       university: '', degree: '', gpa: '', gradMonth: '', gradYear: ''
     },
     demographics: { gender: '', race: '', veteran: '', disability: '', hispanicLatino: '' },
+    applicationDefaults: { workAuthorization: '', needSponsorship: '', currentlyEnrolled: '', degreeLevel: '', expectedGraduation: '', willingToRelocate: '', remoteOK: '' },
     commonReplies: { workAuth: '', sponsorship: '', relocation: '', formerEmployee: '' },
     customAnswers: { pronouns: '', conflictOfInterest: '', familyRel: '', govOfficial: '' },
     essayAnswers: { whyExcited: '', howDidYouHear: '' },
@@ -147,6 +148,7 @@ function AppContent() {
     const pd = profileFormData.personalDetails;
     const demo = profileFormData.demographics;
     const common = profileFormData.commonReplies;
+    const defaults = profileFormData.applicationDefaults; // New check
     const essay = profileFormData.essayAnswers;
 
     // Debug: Show what's missing
@@ -163,10 +165,17 @@ function AppContent() {
     if (!demo.race) missing.push('race');
     if (!demo.veteran) missing.push('veteran');
     if (!demo.disability) missing.push('disability');
-    if (!common.workAuth) missing.push('workAuth');
-    if (!common.sponsorship) missing.push('sponsorship');
-    if (!common.relocation) missing.push('relocation');
-    if (!common.formerEmployee) missing.push('formerEmployee');
+
+    // Check new application defaults instead of legacy common
+    if (defaults) {
+      if (!defaults.workAuthorization) missing.push('workAuthorization');
+      if (!defaults.needSponsorship) missing.push('needSponsorship');
+      if (!defaults.degreeLevel) missing.push('degreeLevel');
+    } else {
+      // Fallback to legacy if defaults not yet saved
+      if (!common.workAuth) missing.push('workAuth');
+    }
+
     // whyExcited is now optional/auto-generated
     if (!essay.howDidYouHear) missing.push('howDidYouHear');
 
@@ -206,6 +215,7 @@ function AppContent() {
       setProfileFormData(prev => ({
         personalDetails: smartMerge(prev.personalDetails, user.personalDetails),
         demographics: smartMerge(prev.demographics, user.demographics),
+        applicationDefaults: smartMerge(prev.applicationDefaults, user.applicationDefaults), // Sync new defaults
         commonReplies: smartMerge(prev.commonReplies, user.commonReplies),
         customAnswers: smartMerge(prev.customAnswers, user.customAnswers),
         essayAnswers: smartMerge(prev.essayAnswers, user.essayAnswers),
@@ -308,6 +318,14 @@ function AppContent() {
     if (!user || !token) return;
     try {
       await api.updateUser(user._id, profileFormData);
+
+      // Explicit Telemetry Logging
+      fetch('http://localhost:5001/api/telemetry', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ event: 'PROFILE_UPDATE', userId: user._id, data: { timestamp: new Date() } })
+      }).catch(() => { });
+
       const updatedUser = await api.getUser(token);
       login(token, updatedUser);
       setIsEditingProfile(false);
@@ -691,9 +709,91 @@ function AppContent() {
                       </label>
                     </div>
 
-                    {/* Common Questions */}
+                    {/* Application Defaults (Universe Auto-Apply) */}
                     <div className="space-y-4">
-                      <h4 className="font-bold text-slate-700 dark:text-slate-300">Common Questions</h4>
+                      <h4 className="font-bold text-slate-700 dark:text-slate-300">Application Defaults</h4>
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <label className="block">
+                          <span className="text-sm font-medium text-slate-600 dark:text-slate-400">Work Authorization?</span>
+                          <select
+                            className="w-full mt-1 p-2 rounded-lg border dark:bg-slate-800 dark:border-slate-700 disabled:opacity-50"
+                            value={profileFormData.applicationDefaults?.workAuthorization || ""}
+                            onChange={(e) => updateProfileField('applicationDefaults', 'workAuthorization', e.target.value)}
+                            disabled={!isEditingProfile}
+                          >
+                            <option value="">Select...</option><option>Yes</option><option>No</option>
+                          </select>
+                        </label>
+                        <label className="block">
+                          <span className="text-sm font-medium text-slate-600 dark:text-slate-400">Need Sponsorship?</span>
+                          <select
+                            className="w-full mt-1 p-2 rounded-lg border dark:bg-slate-800 dark:border-slate-700 disabled:opacity-50"
+                            value={profileFormData.applicationDefaults?.needSponsorship || ""}
+                            onChange={(e) => updateProfileField('applicationDefaults', 'needSponsorship', e.target.value)}
+                            disabled={!isEditingProfile}
+                          >
+                            <option value="">Select...</option><option>No</option><option>Yes</option>
+                          </select>
+                        </label>
+                        <label className="block">
+                          <span className="text-sm font-medium text-slate-600 dark:text-slate-400">Currently Enrolled?</span>
+                          <select
+                            className="w-full mt-1 p-2 rounded-lg border dark:bg-slate-800 dark:border-slate-700 disabled:opacity-50"
+                            value={profileFormData.applicationDefaults?.currentlyEnrolled || ""}
+                            onChange={(e) => updateProfileField('applicationDefaults', 'currentlyEnrolled', e.target.value)}
+                            disabled={!isEditingProfile}
+                          >
+                            <option value="">Select...</option><option>Yes</option><option>No</option>
+                          </select>
+                        </label>
+                        <label className="block">
+                          <span className="text-sm font-medium text-slate-600 dark:text-slate-400">Degree Level</span>
+                          <select
+                            className="w-full mt-1 p-2 rounded-lg border dark:bg-slate-800 dark:border-slate-700 disabled:opacity-50"
+                            value={profileFormData.applicationDefaults?.degreeLevel || ""}
+                            onChange={(e) => updateProfileField('applicationDefaults', 'degreeLevel', e.target.value)}
+                            disabled={!isEditingProfile}
+                          >
+                            <option value="">Select...</option><option>High School</option><option>Associate's</option><option>Bachelor's</option><option>Master's</option><option>PhD</option>
+                          </select>
+                        </label>
+                        <label className="block">
+                          <span className="text-sm font-medium text-slate-600 dark:text-slate-400">Expected Graduation</span>
+                          <input type="text" className="w-full mt-1 p-2 text-sm rounded-lg border dark:bg-slate-800 dark:border-slate-700 disabled:opacity-50"
+                            placeholder="e.g. May 2026"
+                            value={profileFormData.applicationDefaults?.expectedGraduation || ""}
+                            onChange={(e) => updateProfileField('applicationDefaults', 'expectedGraduation', e.target.value)}
+                            disabled={!isEditingProfile}
+                          />
+                        </label>
+                        <label className="block">
+                          <span className="text-sm font-medium text-slate-600 dark:text-slate-400">Willing to Relocate?</span>
+                          <select
+                            className="w-full mt-1 p-2 rounded-lg border dark:bg-slate-800 dark:border-slate-700 disabled:opacity-50"
+                            value={profileFormData.applicationDefaults?.willingToRelocate || ""}
+                            onChange={(e) => updateProfileField('applicationDefaults', 'willingToRelocate', e.target.value)}
+                            disabled={!isEditingProfile}
+                          >
+                            <option value="">Select...</option><option>Yes</option><option>No</option>
+                          </select>
+                        </label>
+                        <label className="block">
+                          <span className="text-sm font-medium text-slate-600 dark:text-slate-400">Open to Remote?</span>
+                          <select
+                            className="w-full mt-1 p-2 rounded-lg border dark:bg-slate-800 dark:border-slate-700 disabled:opacity-50"
+                            value={profileFormData.applicationDefaults?.remoteOK || ""}
+                            onChange={(e) => updateProfileField('applicationDefaults', 'remoteOK', e.target.value)}
+                            disabled={!isEditingProfile}
+                          >
+                            <option value="">Select...</option><option>Yes</option><option>No</option>
+                          </select>
+                        </label>
+                      </div>
+                    </div>
+
+                    {/* Common Questions (Legacy - kept for older profiles) */}
+                    <div className="space-y-4 opacity-75 hidden">
+                      <h4 className="font-bold text-slate-700 dark:text-slate-300">Common Questions (Legacy)</h4>
                       <label className="block">
                         <span className="text-sm font-medium text-slate-600 dark:text-slate-400">Work Authorization?</span>
                         <select
@@ -941,7 +1041,7 @@ function AppContent() {
         onClose={() => setReviewApp(null)}
         onApprove={async (appId) => {
           try {
-            await fetch(`http://localhost:5000/api/applications/${appId}/apply`, { method: 'POST' });
+            await fetch(`http://localhost:5001/api/applications/${appId}/apply`, { method: 'POST' });
           } catch (err) { alert("Apply failed"); }
         }}
       />

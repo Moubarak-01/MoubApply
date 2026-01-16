@@ -73,6 +73,15 @@ export interface IUser extends Document {
     relocation: string; // "Yes", "No"
     formerEmployee: string; // "Yes", "No"
   };
+  applicationDefaults?: {
+    workAuthorization: string;
+    needSponsorship: string;
+    currentlyEnrolled: string;
+    degreeLevel: string;
+    expectedGraduation: string;
+    willingToRelocate: string;
+    remoteOK: string;
+  };
   personalDetails?: {
     phone: string;
     address: string;
@@ -149,6 +158,16 @@ const UserSchema: Schema = new Schema({
     veteran: { type: String, default: '' },
     disability: { type: String, default: '' },
     hispanicLatino: { type: String, default: '' }
+  },
+  // New standardized application defaults (Universal Auto-Apply)
+  applicationDefaults: {
+    workAuthorization: { type: String, default: '' }, // "Yes", "No"
+    needSponsorship: { type: String, default: '' },   // "Yes", "No"
+    currentlyEnrolled: { type: String, default: '' }, // "Yes", "No"
+    degreeLevel: { type: String, default: '' },       // "Bachelor's", "Master's", etc.
+    expectedGraduation: { type: String, default: '' }, // "May 2026"
+    willingToRelocate: { type: String, default: '' }, // "Yes", "No"
+    remoteOK: { type: String, default: '' },          // "Yes", "No"
   },
   commonReplies: {
     workAuth: { type: String, default: '' },

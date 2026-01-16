@@ -235,7 +235,8 @@ app.post('/api/applications/:id/tailor', async (req: Request, res: Response): Pr
 app.post('/api/ai/assistant', async (req: Request, res: Response): Promise<any> => {
     try {
         const { userId, message, model, context } = req.body;
-        const selectedModel = model || 'mistralai/mistral-small-3.1-24b-instruct:free';
+        // Default to Llama 3.3 if no model specified
+        const selectedModel = model || 'meta-llama/llama-3.3-70b-instruct:free';
         console.log(`🤖 AI Request | Model: ${selectedModel} | User: ${userId}`);
 
         const user = await User.findById(userId);
@@ -288,17 +289,30 @@ app.post('/api/ai/assistant', async (req: Request, res: Response): Promise<any> 
         res.setHeader('Cache-Control', 'no-cache');
         res.setHeader('Connection', 'keep-alive');
 
+        // Waterfall: Default/Selected -> Llama 3.3 -> Mistral -> Gemini -> Others
+        // Note: Removing :free suffix from some that might have changed, adding high-availability small models
         const CHAT_MODELS = [
             selectedModel,
-            'google/gemini-2.0-flash-exp:free',
             'meta-llama/llama-3.3-70b-instruct:free',
-            'mistralai/mistral-small-3.1-24b-instruct:free'
+            'mistralai/mistral-small-3.1-24b-instruct:free',
+            'google/gemini-2.0-flash-exp:free',
+            'xiaomi/mimo-v2-flash:free', // User requested, try here too
+            'meta-llama/llama-3.1-8b-instruct:free', // Reliable fallback
+            'huggingfaceh4/zephyr-7b-beta:free', // Classic fallback
+            'openchat/openchat-7b:free',
+            'gryphe/mythomax-l2-13b:free',
+            'undi95/toppy-m-7b:free', // Very fast/cheap usually
+            'liquid/lfm-40b:free',
+            'google/gemma-2-9b-it:free'
         ];
+
+        // Deduplicate
+        const UNIQUE_MODELS = [...new Set(CHAT_MODELS)];
 
         let streamSuccess = false;
         let lastChatError: any = null;
 
-        for (const modelId of CHAT_MODELS) {
+        for (const modelId of UNIQUE_MODELS) {
             if (streamSuccess) break;
             try {
                 console.log(`🤖 AI Chat trying model: ${modelId}`);
@@ -889,13 +903,14 @@ app.post('/api/applications', async (req: Request, res: Response): Promise<any> 
 // Update User Profile Route
 app.put('/api/user', async (req: Request, res: Response): Promise<any> => {
     try {
-        const { userId, demographics, commonReplies, personalDetails, customAnswers, essayAnswers, preferences, additionalAnswers } = req.body;
+        const { userId, demographics, commonReplies, applicationDefaults, personalDetails, customAnswers, essayAnswers, preferences, additionalAnswers } = req.body;
         console.log(`💾 [TELEMETRY] Profile update request - User: ${userId}`);
         if (!userId) return res.status(400).json({ error: 'userId required' });
 
         const update: any = {};
         if (demographics) update.demographics = demographics;
         if (commonReplies) update.commonReplies = commonReplies;
+        if (applicationDefaults) update.applicationDefaults = applicationDefaults;
         if (personalDetails) update.personalDetails = personalDetails;
         if (customAnswers) update.customAnswers = customAnswers;
         if (essayAnswers) update.essayAnswers = essayAnswers;
