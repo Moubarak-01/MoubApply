@@ -137,7 +137,7 @@ npm run dev
 
 ---
 
-## � Project Structure
+## 📂 Project Structure
 
 ```
 MoubApply/
