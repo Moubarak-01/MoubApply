@@ -128,6 +128,12 @@ npm start
 ```
 *Runs on http://localhost:5001*
 
+```bash
+cd backend
+npm run whisper
+```
+*Runs the local whisper server for STT*
+
 ### 3. Frontend Setup
 ```bash
 npm install
